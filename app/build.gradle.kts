@@ -5,14 +5,12 @@ plugins {
 
 android {
     namespace = "com.example.myspeaker"
-    compileSdk {
-        version = release(36)
-    }
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.example.myspeaker"
         minSdk = 26
-        targetSdk = 36
+        targetSdk = 36  // Android 16 - using CDM for A2DP codec access
         versionCode = 1
         versionName = "1.0"
 

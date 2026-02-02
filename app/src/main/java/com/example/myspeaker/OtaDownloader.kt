@@ -22,18 +22,20 @@ class OtaDownloader(private val context: Context) {
         private const val TAG = "OtaDownloader"
         
         // Google Drive file IDs - UPDATE THESE WITH YOUR FILES
-        private const val GDRIVE_LATEST_TXT_ID = "1fHQ4qn4enJ5hXY0BJX1fTKX09guNOb2y"
+        // Use the file ID from your Google Drive shared link: https://drive.google.com/file/d/<FILE_ID>/view
+        private const val GDRIVE_LATEST_TXT_ID = "YOUR_LATEST_TXT_FILE_ID_HERE"
         
         // AES-256 Key - MUST MATCH recovery_main.cpp and encrypt_firmware.py!
+        // Generate your own key using: python encrypt_firmware.py --generate-key
         private val AES_KEY = byteArrayOf(
-            0x5A.toByte(), 0x2B.toByte(), 0x9C.toByte(), 0x4E.toByte(),
-            0x1F.toByte(), 0x8D.toByte(), 0x6A.toByte(), 0x3C.toByte(),
-            0x7B.toByte(), 0x0E.toByte(), 0x4F.toByte(), 0x2D.toByte(),
-            0x8C.toByte(), 0x5A.toByte(), 0x1B.toByte(), 0x9E.toByte(),
-            0x3D.toByte(), 0x6C.toByte(), 0x0F.toByte(), 0x4A.toByte(),
-            0x7E.toByte(), 0x2B.toByte(), 0x8D.toByte(), 0x5C.toByte(),
-            0x1A.toByte(), 0x9F.toByte(), 0x3E.toByte(), 0x6B.toByte(),
-            0x0D.toByte(), 0x4C.toByte(), 0x7A.toByte(), 0x2E.toByte()
+            0x00.toByte(), 0x00.toByte(), 0x00.toByte(), 0x00.toByte(),
+            0x00.toByte(), 0x00.toByte(), 0x00.toByte(), 0x00.toByte(),
+            0x00.toByte(), 0x00.toByte(), 0x00.toByte(), 0x00.toByte(),
+            0x00.toByte(), 0x00.toByte(), 0x00.toByte(), 0x00.toByte(),
+            0x00.toByte(), 0x00.toByte(), 0x00.toByte(), 0x00.toByte(),
+            0x00.toByte(), 0x00.toByte(), 0x00.toByte(), 0x00.toByte(),
+            0x00.toByte(), 0x00.toByte(), 0x00.toByte(), 0x00.toByte(),
+            0x00.toByte(), 0x00.toByte(), 0x00.toByte(), 0x00.toByte()
         )
         
         private const val AES_BLOCK_SIZE = 16

@@ -2319,7 +2319,8 @@ class MainActivity : AppCompatActivity() {
                             // Regular sound status update (0x00-0x0F unmuted, 0x80-0x8F muted)
                             soundStatus = firstByte
                             runOnUiThread {
-                                deviceInfoBottomSheet?.updateSoundStatus(soundStatus)
+                                val sheet = deviceInfoBottomSheet ?: DeviceInfoBottomSheet.currentInstance
+                                sheet?.updateSoundStatus(soundStatus)
                             }
                         }
                     }
@@ -2425,7 +2426,8 @@ class MainActivity : AppCompatActivity() {
                             // Regular sound status update (0x00-0x0F unmuted, 0x80-0x8F muted)
                             soundStatus = firstByte
                             runOnUiThread {
-                                deviceInfoBottomSheet?.updateSoundStatus(soundStatus)
+                                val sheet = deviceInfoBottomSheet ?: DeviceInfoBottomSheet.currentInstance
+                                sheet?.updateSoundStatus(soundStatus)
                             }
                         }
                     }

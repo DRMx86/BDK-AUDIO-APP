@@ -1,179 +1,361 @@
-# BDK Audio App
+<p align="center">
+  <img src="https://img.shields.io/badge/Android-8.0+-3DDC84?style=for-the-badge&logo=android&logoColor=white" alt="Android"/>
+  <img src="https://img.shields.io/badge/iOS-15.0+-000000?style=for-the-badge&logo=apple&logoColor=white" alt="iOS"/>
+  <img src="https://img.shields.io/badge/Kotlin-Multiplatform-7F52FF?style=for-the-badge&logo=kotlin&logoColor=white" alt="Kotlin"/>
+  <img src="https://img.shields.io/badge/BLE-5.0-0082FC?style=for-the-badge&logo=bluetooth&logoColor=white" alt="BLE"/>
+</p>
 
-A professional Android companion application for controlling ESP32-based Bluetooth speakers with DSP (Digital Signal Processing) capabilities and audio-reactive LED matrix effects.
+<p align="center">
+  <b>BDK Audio - Cross-Platform Companion App for ESP32 Bluetooth Speakers</b><br>
+  <sub>Control DSP | LED Effects | OTA Updates | Real-time Audio Meters</sub>
+</p>
+
+<p align="center">
+  <i>Kotlin Multiplatform app for Android and iOS</i><br>
+  <a href="https://github.com/WillyBilly06/ESP32-A2DP-SINK-WITH-CODECS-UPDATED">View ESP32 Firmware Project</a>
+</p>
+
+---
+
+## Table of Contents
+
+- [Overview](#overview)
+- [Screenshots](#screenshots)
+- [Features](#features)
+- [Architecture](#architecture)
+- [Requirements](#requirements)
+- [Installation](#installation)
+- [OTA Updates](#ota-updates)
+- [BLE Protocol](#ble-protocol)
+- [Project Structure](#project-structure)
+- [Related Projects](#related-projects)
+- [License](#license)
+
+---
 
 ## Overview
 
-BDK Audio App provides a comprehensive control interface for managing Bluetooth Low Energy (BLE) connected ESP32 audio devices. The application enables users to adjust DSP parameters, monitor real-time audio levels, select LED visualization effects, rename the device, and perform firmware updates over-the-air.
+BDK Audio is a cross-platform companion application built with Kotlin Multiplatform for controlling ESP32-based Bluetooth speakers. It provides a unified interface for adjusting DSP parameters, selecting LED visualization effects, monitoring real-time audio levels, and performing encrypted firmware updates over-the-air.
 
-## App Screenshots
+---
 
-<p align="center">
-  <img src="screenshots/1000025257.jpg" width="300" alt="Main Controls"/>
-  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
-  <img src="screenshots/1000025259.jpg" width="300" alt="Settings & OTA"/>
-</p>
-
-<br/>
+## Screenshots
 
 <p align="center">
-  <img src="screenshots/1000025255.jpg" width="300" alt="App Info"/>
-  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
-  <img src="screenshots/1000025253.jpg" width="300" alt="Device Info"/>
+  <img src="screenshots/1000025257.jpg" width="280" alt="Main Controls"/>
+  &nbsp;&nbsp;&nbsp;&nbsp;
+  <img src="screenshots/1000025259.jpg" width="280" alt="Settings & OTA"/>
 </p>
+
+<p align="center">
+  <img src="screenshots/1000025255.jpg" width="280" alt="App Info"/>
+  &nbsp;&nbsp;&nbsp;&nbsp;
+  <img src="screenshots/1000025253.jpg" width="280" alt="Device Info"/>
+</p>
+
+---
 
 ## Features
 
-###  Bluetooth Connectivity
-- BLE device scanning with service UUID filtering
-- Automatic MTU negotiation (up to 517 bytes for fast OTA)
-- Real-time connection status monitoring
-- Switch between multiple devices
-- Reads current device settings on connect (EQ, DSP toggles, LED effect)
-- **Bluetooth state detection**: Auto-disconnect when Bluetooth is turned off
-- **Bluetooth enable prompt**: Asks user to enable Bluetooth if disabled
+### Bluetooth Connectivity
 
-###  Bluetooth Codec Selection
-Change the Bluetooth audio codec directly from the app:
-- **SBC** - Universal compatibility (default)
-- **AAC** - Better quality for iOS devices
-- **aptX** - Low latency, good quality
-- **aptX HD** - High-definition audio
-- **LDAC** - Highest quality (up to 990kbps)
+| Feature | Description |
+|:--------|:------------|
+| BLE Scanning | Filter devices by service UUID |
+| MTU Negotiation | Up to 517 bytes for fast OTA |
+| Connection Monitoring | Real-time status updates |
+| Multi-Device Support | Switch between speakers |
+| Auto-Reconnect | Automatic reconnection on disconnect |
+| Bluetooth State Detection | Auto-disconnect when BT disabled |
 
-> **Note**: Codec selection requires the speaker to be connected via Bluetooth (A2DP) first. Some devices may require Developer Options enabled.
+### Audio DSP Control
 
-###  DSP Control
-- **Bass Boost**: Toggle hardware bass enhancement
-- **Channel Flip**: Swap left/right audio channels
-- **EQ Bypass**: Bypass all DSP processing
-- **3-Band Equalizer**: Adjustable Bass, Mid, and Treble (-12 to +12 dB)
-- Real-time audio level meters (30 Hz, 60 Hz, 100 Hz bands)
+| Control | Range | Description |
+|:--------|:------|:------------|
+| Bass | -12 to +12 dB | 80 Hz center frequency |
+| Mid | -12 to +12 dB | 1 kHz center frequency |
+| Treble | -12 to +12 dB | 8 kHz center frequency |
+| Bass Boost | On/Off | Hardware bass enhancement |
+| EQ Bypass | On/Off | Bypass all DSP processing |
+| Channel Flip | On/Off | Swap L/R channels |
 
-###  LED Effects (21 Modes)
-Choose from 21 audio-reactive visualization effects for the 16x16 WS2812B LED matrix:
+### EQ Presets
 
-| ID | Effect | ID | Effect | ID | Effect |
-|----|--------|----|---------|----|--------|
-| 0 | Spectrum Bars | 7 | Starfield | 14 | Bass Reactor |
-| 1 | Beat Pulse | 8 | Wave | 15 | Meteor Shower |
-| 2 | Ripple | 9 | Fireworks | 16 | Breathing |
-| 3 | Fire | 10 | Rainbow Wave | 17 | DNA Helix |
-| 4 | Plasma | 11 | Particle Burst | 18 | Audio Scope |
-| 5 | Matrix Rain | 12 | Kaleidoscope | 19 | Bouncing Balls |
-| 6 | VU Meter | 13 | Frequency Spiral | 20 | Lava Lamp |
+| Preset | Bass | Mid | Treble |
+|:-------|:----:|:---:|:------:|
+| Flat | 0 | 0 | 0 |
+| Bass Boost | +6 | 0 | 0 |
+| Treble Boost | 0 | 0 | +6 |
+| V-Shape | +4 | -2 | +4 |
+| Warm | +3 | +1 | -2 |
+| Bright | -1 | 0 | +4 |
+| Vocal | -2 | +4 | +1 |
+| Electronic | +5 | -1 | +3 |
+| Acoustic | +2 | +2 | +3 |
+| Rock | +4 | -1 | +3 |
 
-###  Device Management
-- Rename your ESP32 speaker (persisted in NVS)
-- View current firmware version
-- Device info screen with connection details
+### LED Effects (22 Modes)
 
-###  Over-the-Air Firmware Updates
-- Select firmware binary (.bin) from device storage
-- **Fast + Reliable BLE transfer** (~60 seconds for 2MB)
-  - Batched ACK: 7 fast writes + 1 ACK per 8 packets
-  - Automatic retry with backoff on buffer-full
-- **Transfer verification** with CHECK command before finalize
-- Real-time progress bar with KB transferred
-- Auto-finalize fallback (3s timeout after CHECK_OK)
-- Automatic ESP32 reboot on completion
+Audio-reactive visualization effects for 16x16 WS2812B LED matrix:
 
-###  User Interface
-- Modern dark theme with Material Design 3 components
-- Card-based responsive layout
-- Edge-to-edge display with proper inset handling
-- MaterialSwitch toggles and styled spinners
-- Gradient progress bars for audio meters
+| ID | Effect | ID | Effect |
+|:--:|:-------|:--:|:-------|
+| 0 | Spectrum Bars | 11 | Particle Burst |
+| 1 | Beat Pulse | 12 | Kaleidoscope |
+| 2 | Ripple | 13 | Frequency Spiral |
+| 3 | Fire | 14 | Bass Reactor |
+| 4 | Plasma | 15 | Meteor Shower |
+| 5 | Matrix Rain | 16 | Breathing |
+| 6 | VU Meter | 17 | DNA Helix |
+| 7 | Starfield | 18 | Audio Scope |
+| 8 | Wave | 19 | Bouncing Balls |
+| 9 | Fireworks | 20 | Lava Lamp |
+| 10 | Rainbow Wave | 21 | Ambient (static color) |
 
-## Technical Specifications
+### LED Controls
 
-### Requirements
-- **Android Version**: 8.0 Oreo (API level 26) or higher
-- **Target SDK**: 36 (Android 16)
-- **Bluetooth**: Low Energy (BLE) support required
+| Parameter | Range | Description |
+|:----------|:------|:------------|
+| Brightness | 0-100% | Global LED brightness |
+| Speed | 0-100% | Effect animation speed |
+| Color 1 | RGB | Primary effect color |
+| Color 2 | RGB | Secondary/gradient color |
+| Gradient Type | 0-2 | Color blend mode |
 
-### Permissions
+### Bluetooth Codec Selection
+
+Change the A2DP audio codec directly from the app:
+
+| Codec | Max Bitrate | Best For |
+|:------|:-----------:|:---------|
+| SBC | 328 kbps | Universal compatibility |
+| AAC | 256 kbps | Apple devices |
+| aptX | 352 kbps | Low latency |
+| aptX HD | 576 kbps | High-definition audio |
+| LDAC | 990 kbps | Hi-Res listening |
+
+### Over-the-Air Updates
+
+| Feature | Description |
+|:--------|:------------|
+| Encrypted Transfer | AES-256-CBC encryption |
+| Fast BLE Protocol | Batched ACK (7 fast + 1 ACK) |
+| Progress Tracking | Real-time KB transferred |
+| Verification | CHECK command before finalize |
+| Auto-Reboot | Automatic ESP32 restart on completion |
+
+---
+
+## Architecture
+
+### Kotlin Multiplatform Structure
+
+```
+shared/               # Cross-platform code (Kotlin)
+├── commonMain/       # Shared business logic
+│   ├── BleUnifiedProtocol.kt  # BLE command/response protocol
+│   ├── DeviceModels.kt        # Data models
+│   ├── EqPresets.kt           # EQ preset definitions
+│   └── LedEffects.kt          # LED effect definitions
+├── androidMain/      # Android-specific implementations
+└── iosMain/          # iOS-specific implementations
+
+app/                  # Android app (Kotlin)
+├── MainActivityRedesign.kt    # Main control UI
+├── OtaActivity.kt             # OTA update screen
+├── OtaDownloader.kt           # Google Drive integration
+└── SettingsActivity.kt        # DSP toggles, codec selection
+
+iosApp/               # iOS app (SwiftUI)
+├── MainControlView.swift      # Main control UI
+├── SettingsView.swift         # Settings screen
+└── OtaView.swift              # OTA update screen
+```
+
+### BLE Protocol
+
+The app uses a unified binary protocol with 3 BLE characteristics:
+
+| Characteristic | UUID | Direction | Purpose |
+|:---------------|:-----|:----------|:--------|
+| CMD | `xxxx-b1xx` | Write | Send commands to ESP32 |
+| STATUS | `xxxx-b2xx` | Notify | Receive status updates |
+| METER | `xxxx-b3xx` | Notify | Real-time audio levels |
+
+---
+
+## Requirements
+
+### Android
+
+| Requirement | Value |
+|:------------|:------|
+| Min SDK | 26 (Android 8.0 Oreo) |
+| Target SDK | 36 (Android 16) |
+| BLE Support | Required |
+
+### iOS
+
+| Requirement | Value |
+|:------------|:------|
+| Min iOS | 15.0 |
+| Device | iPhone/iPad with BLE |
+
+### Permissions (Android)
+
 | Permission | Purpose |
-|------------|---------|
-| `BLUETOOTH` / `BLUETOOTH_ADMIN` | Legacy Bluetooth access (Android ≤ 11) |
+|:-----------|:--------|
 | `BLUETOOTH_SCAN` | Scan for BLE devices (Android 12+) |
 | `BLUETOOTH_CONNECT` | Connect to BLE devices (Android 12+) |
 | `ACCESS_FINE_LOCATION` | Required for BLE scanning |
+| `BLUETOOTH` / `BLUETOOTH_ADMIN` | Legacy (Android 11 and below) |
 
-### BLE Service UUIDs
-The app communicates with the ESP32 using custom GATT services:
-
-```
-Control Service:    0000xxad-0000-1000-8000-00805f9b34fb
-├── Control Char:   0000xxb0-...  (DSP toggles: bass boost, flip, bypass)
-├── EQ Char:        0000xxb3-...  (3-byte EQ: bass, mid, treble)
-├── Name Char:      0000xxb5-...  (Device name, up to 20 chars)
-├── LED Effect:     0000xxb4-...  (1-byte effect ID: 0-20)
-├── FW Version:     0000xxb6-...  (Firmware version string)
-├── OTA Control:    0000xxb1-...  (BEGIN:<size>, END, ABORT, PROG:<bytes>)
-└── OTA Data:       0000xxb2-...  (Firmware binary chunks)
-
-Levels Service:     0000xxab-0000-1000-8000-00805f9b34fb
-└── Levels Char:    0000xxac-...  (CSV audio levels: 30Hz,60Hz,100Hz)
-```
-
-### Architecture
-- **Language**: Kotlin 1.9+
-- **UI Framework**: Android Views with Material Design 3
-- **Bluetooth**: Native Android BLE API (BluetoothGatt)
-- **Build System**: Gradle with Kotlin DSL
-- **Min SDK**: 26 (Android 8.0)
+---
 
 ## Installation
 
-### From Source
-1. Clone the repository:
-   ```bash
-   git clone https://github.com/WillyBilly06/BDK-AUDIO-APP.git
-   ```
-2. Open in Android Studio (Hedgehog or newer recommended)
-3. Sync Gradle dependencies
-4. Connect an Android device or start an emulator
-5. Build and run (`Shift+F10`)
+### From Source (Android)
+
+```bash
+git clone https://github.com/WillyBilly06/BDK-AUDIO-APP.git
+cd BDK-AUDIO-APP
+```
+
+1. Open in Android Studio (Hedgehog or newer)
+2. Sync Gradle dependencies
+3. Connect Android device or start emulator
+4. Build and run (`Shift+F10`)
+
+### From Source (iOS)
+
+```bash
+cd iosApp
+open BDKAudio.xcodeproj
+```
+
+1. Open in Xcode 15+
+2. Select your development team
+3. Build and run on device (BLE requires physical device)
 
 ### APK Installation
-1. Download the latest APK from the Releases page
-2. Enable "Install from unknown sources" on your Android device
+
+1. Download latest APK from Releases
+2. Enable "Install from unknown sources" on Android
 3. Install the APK
 
-## Usage
+---
 
-1. **Connect**: Tap "Connect" to scan for ESP32 speakers
-2. **Select Device**: Choose your device from the list
-3. **Adjust Settings**: Use the switches and sliders to configure DSP
-4. **Change LED Effect**: Select a visualization from the LED Effects dropdown
-5. **Update Firmware**: Select a .bin file and tap "Start OTA"
+## OTA Updates
+
+### Setting Up OTA
+
+1. **Generate AES Key**
+   ```bash
+   cd tools
+   python encrypt_firmware.py --generate-key
+   ```
+
+2. **Update Keys** in:
+   - `tools/encrypt_firmware.py` (AES_KEY)
+   - `recovery/main/recovery_main.cpp` (AES_KEY)
+   - `app/.../OtaDownloader.kt` (AES_KEY)
+   - iOS: `OtaView.swift` (aesKey)
+
+3. **Encrypt Firmware**
+   ```bash
+   python encrypt_firmware.py build/bt_audio_sink.bin --version 1.1.0
+   ```
+
+4. **Upload to Google Drive**
+   - Upload `ota_releases/1.1.0.enc` to Google Drive
+   - Share with "Anyone with link"
+   - Create `latest.txt` with: `1.1.0,<FILE_ID>`
+
+5. **Update File IDs** in `OtaDownloader.kt`:
+   ```kotlin
+   private const val GDRIVE_LATEST_TXT_ID = "YOUR_LATEST_TXT_FILE_ID"
+   ```
+
+---
+
+## BLE Protocol
+
+### Command Format
+
+All commands are binary packets:
+
+```
+[CMD_ID:1][PAYLOAD:N]
+```
+
+### Available Commands
+
+| Command | ID | Payload | Description |
+|:--------|:--:|:--------|:------------|
+| SET_EQ | 0x10 | bass, mid, treble | Set EQ values |
+| SET_EQ_PRESET | 0x11 | presetId | Apply preset |
+| SET_CONTROL | 0x12 | flags | DSP toggles |
+| SET_NAME | 0x13 | name[20] | Rename device |
+| SET_LED | 0x20 | effect, brightness, speed, colors | Full LED config |
+| SET_LED_EFFECT | 0x21 | effectId | Change effect only |
+| SET_LED_BRIGHTNESS | 0x22 | brightness | Brightness only |
+| OTA_BEGIN | 0x40 | size[4] | Start OTA |
+| OTA_DATA | 0x41 | seq[2], data[N] | Firmware chunk |
+| OTA_END | 0x42 | - | Finalize OTA |
+| REQUEST_STATUS | 0x50 | - | Request full status |
+| PING | 0xFF | - | Connection check |
+
+---
 
 ## Project Structure
 
 ```
-app/src/main/
-├── java/com/example/myspeaker/
-│   ├── MainActivity.kt       # Main BLE control activity
-│   ├── AppInfoActivity.kt    # App version info screen
-│   └── DeviceInfoActivity.kt # Device details screen
-├── res/
-│   ├── layout/               # XML layouts for all activities
-│   ├── drawable/             # Custom button/card backgrounds
-│   ├── values/               # Colors, strings, themes
-│   └── mipmap-*/             # App icons (all densities)
-└── AndroidManifest.xml       # App configuration & permissions
+BDK-AUDIO-APP/
+├── README.md
+├── app/                    # Android app module
+│   ├── src/main/
+│   │   ├── java/com/example/myspeaker/
+│   │   │   ├── MainActivityRedesign.kt
+│   │   │   ├── SettingsActivity.kt
+│   │   │   ├── OtaActivity.kt
+│   │   │   ├── OtaDownloader.kt
+│   │   │   └── ...
+│   │   └── res/
+│   │       ├── layout/
+│   │       ├── drawable/
+│   │       └── values/
+│   └── build.gradle.kts
+├── shared/                 # Kotlin Multiplatform shared code
+│   ├── src/
+│   │   ├── commonMain/kotlin/
+│   │   ├── androidMain/kotlin/
+│   │   └── iosMain/kotlin/
+│   └── build.gradle.kts
+├── iosApp/                 # iOS SwiftUI app
+│   └── BDKAudio/
+│       ├── Views/
+│       ├── ViewModels/
+│       └── Utilities/
+└── screenshots/
 ```
+
+---
 
 ## Related Projects
 
-- [ESP32 A2DP Sink with LDAC/aptX/AAC](https://github.com/WillyBilly06/esp32-a2dp-sink-with-LDAC-APTX-AAC) - The ESP32 firmware this app controls
+| Project | Description |
+|:--------|:------------|
+| [ESP32-A2DP-SINK-WITH-CODECS-UPDATED](https://github.com/WillyBilly06/ESP32-A2DP-SINK-WITH-CODECS-UPDATED) | ESP32 firmware (ESP-IDF 5.5.2) |
+| [esp32-a2dp-sink-with-LDAC-APTX-AAC](https://github.com/WillyBilly06/esp32-a2dp-sink-with-LDAC-APTX-AAC) | Original ESP-IDF 5.3 version |
+
+---
 
 ## Developer
 
 Created by **WillyBilly**
 
+---
+
 ## License
 
 This project is proprietary software. All rights reserved.
-

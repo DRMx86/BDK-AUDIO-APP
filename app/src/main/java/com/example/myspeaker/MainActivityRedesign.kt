@@ -2,8 +2,13 @@ package com.example.myspeaker
 
 import android.annotation.SuppressLint
 import android.bluetooth.*
+import android.companion.AssociationInfo
+import android.companion.AssociationRequest
+import android.companion.BluetoothDeviceFilter
+import android.companion.CompanionDeviceManager
 import android.content.Context
 import android.content.Intent
+import android.content.IntentSender
 import android.content.SharedPreferences
 import android.graphics.Color
 import android.graphics.drawable.GradientDrawable
@@ -13,10 +18,12 @@ import android.os.Handler
 import android.os.Looper
 import android.view.View
 import android.widget.*
+import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import java.util.*
+import java.util.regex.Pattern
 
 /**
  * BDK Audio - Main Control Activity (Redesigned)
@@ -103,15 +110,16 @@ class MainActivityRedesign : AppCompatActivity() {
     private lateinit var tvVal30: TextView
     private lateinit var tvVal60: TextView
     private lateinit var tvVal100: TextView
-    private lateinit var btnFineTune: LinearLayout
-    private lateinit var fineTuneContent: LinearLayout
-    private lateinit var tvFineTuneArrow: TextView
     private lateinit var seekBass: SeekBar
     private lateinit var seekMid: SeekBar
     private lateinit var seekTreble: SeekBar
     private lateinit var tvBassLabel: TextView
     private lateinit var tvMidLabel: TextView
     private lateinit var tvTrebleLabel: TextView
+    
+    // EQ Preset buttons for highlighting
+    private val presetButtonMap = mutableMapOf<Int, FrameLayout>()  // presetId -> button
+    private var currentMatchedPresetId = -1  // -1 means "Custom"
 
     // UI Elements - LED Tab
     private lateinit var tvCurrentEffect: TextView
@@ -149,13 +157,33 @@ class MainActivityRedesign : AppCompatActivity() {
     // A2DP for codec control
     private var bluetoothA2dp: BluetoothA2dp? = null
     private var a2dpDevice: BluetoothDevice? = null
+    
+    // Companion Device Manager for codec access on Android 12+
+    private var companionDeviceManager: CompanionDeviceManager? = null
+    private var hasCdmAssociation = false
+    private var cdmAssociationRequested = false
+    
+    // CDM association result launcher
+    private val cdmAssociationLauncher = registerForActivityResult(
+        ActivityResultContracts.StartIntentSenderForResult()
+    ) { result ->
+        if (result.resultCode == RESULT_OK) {
+            android.util.Log.i("CDM", "Device association granted")
+            hasCdmAssociation = true
+            prefs.edit().putBoolean("cdm_association", true).apply()
+            // Now we can access codec info
+            updateCodecFromSystem()
+        } else {
+            android.util.Log.w("CDM", "Device association denied")
+            cdmAssociationRequested = false
+        }
+    }
 
     // State
     private lateinit var prefs: SharedPreferences
     private val handler = Handler(Looper.getMainLooper())
-    private var currentPresetId = 0
+    private var currentPresetId = -1
     private var currentEffectId = 0
-    private var isFineTuneExpanded = false
     private var currentLedBrightness = 100
     private var currentLedSpeed = 50
     private var currentLedColor1 = Color.WHITE
@@ -207,6 +235,17 @@ class MainActivityRedesign : AppCompatActivity() {
     private val soundWriteLock = Object()
     @Volatile private var soundUploadAck: ByteArray? = null
     private val soundUploadLock = Object()
+    
+    // BLE command queue to prevent write collisions
+    private val bleCommandQueue = java.util.concurrent.ConcurrentLinkedQueue<ByteArray>()
+    @Volatile private var bleWriteInProgress = false
+    private val bleQueueLock = Object()
+    
+    // Throttling for slider commands (brightness, speed, EQ)
+    private var lastBrightnessCommand = 0L
+    private var lastSpeedCommand = 0L
+    private var lastEqCommand = 0L
+    private val SLIDER_THROTTLE_MS = 50L  // Min 50ms between slider commands
 
     // A2DP profile listener for codec control
     @SuppressLint("MissingPermission")
@@ -267,6 +306,12 @@ class MainActivityRedesign : AppCompatActivity() {
             android.util.Log.e("A2DP", "Failed to get A2DP proxy", e)
         }
         
+        // Initialize Companion Device Manager for codec access on Android 12+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            companionDeviceManager = getSystemService(Context.COMPANION_DEVICE_SERVICE) as? CompanionDeviceManager
+            hasCdmAssociation = prefs.getBoolean("cdm_association", false)
+        }
+        
         // Handle auto-connect from ConnectionActivity
         handleAutoConnect()
     }
@@ -297,9 +342,6 @@ class MainActivityRedesign : AppCompatActivity() {
         tvVal30 = findViewById(R.id.tvVal30)
         tvVal60 = findViewById(R.id.tvVal60)
         tvVal100 = findViewById(R.id.tvVal100)
-        btnFineTune = findViewById(R.id.btnFineTune)
-        fineTuneContent = findViewById(R.id.fineTuneContent)
-        tvFineTuneArrow = findViewById(R.id.tvFineTuneArrow)
         seekBass = findViewById(R.id.seekBass)
         seekMid = findViewById(R.id.seekMid)
         seekTreble = findViewById(R.id.seekTreble)
@@ -337,6 +379,12 @@ class MainActivityRedesign : AppCompatActivity() {
         // Setup color previews
         updateColorPreview(viewColor1, currentLedColor1)
         updateColorPreview(viewColor2, currentLedColor2)
+        
+        // After LED tab is laid out (invisible), switch to GONE so it doesn't overlap
+        // This ensures views are measured but tab is hidden
+        tabLed.post {
+            tabLed.visibility = View.GONE
+        }
     }
 
     private fun setupListeners() {
@@ -424,15 +472,6 @@ class MainActivityRedesign : AppCompatActivity() {
         navSound.setOnClickListener { switchToTab(0) }
         navLed.setOnClickListener { switchToTab(1) }
 
-        // Fine tune toggle
-        btnFineTune.setOnClickListener {
-            isFineTuneExpanded = !isFineTuneExpanded
-            android.util.Log.d("EQ", "Fine tune clicked - expanded: $isFineTuneExpanded")
-            fineTuneContent.visibility = if (isFineTuneExpanded) View.VISIBLE else View.GONE
-            tvFineTuneArrow.text = if (isFineTuneExpanded) "▲" else "▼"
-            android.util.Log.d("EQ", "fineTuneContent visibility: ${fineTuneContent.visibility}, height: ${fineTuneContent.height}")
-        }
-
         // EQ Sliders
         setupSeekBar(seekBass, tvBassLabel, "Bass")
         setupSeekBar(seekMid, tvMidLabel, "Mid")
@@ -442,12 +481,19 @@ class MainActivityRedesign : AppCompatActivity() {
         seekBrightness.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
                 tvBrightness.text = progress.toString()
-                if (fromUser) {
+                if (fromUser && !updatingFromDevice) {
                     sendLedBrightness(progress)
                 }
             }
             override fun onStartTrackingTouch(seekBar: SeekBar?) {}
-            override fun onStopTrackingTouch(seekBar: SeekBar?) {}
+            override fun onStopTrackingTouch(seekBar: SeekBar?) {
+                // Send final value when user stops dragging
+                if (!updatingFromDevice) {
+                    seekBar?.let {
+                        sendLedBrightness(it.progress)
+                    }
+                }
+            }
         })
         
         // Speed slider
@@ -456,11 +502,24 @@ class MainActivityRedesign : AppCompatActivity() {
                 tvLedSpeed.text = progress.toString()
                 if (fromUser && !updatingFromDevice) {
                     currentLedSpeed = progress
-                    sendLedSettings()
+                    // Edge values (0, 100) always sent immediately, others throttled
+                    if (progress == 0 || progress == 100) {
+                        sendLedSettings()
+                    } else {
+                        sendLedSettingsThrottled()
+                    }
                 }
             }
             override fun onStartTrackingTouch(seekBar: SeekBar?) {}
-            override fun onStopTrackingTouch(seekBar: SeekBar?) {}
+            override fun onStopTrackingTouch(seekBar: SeekBar?) {
+                // Only send final value when user stops dragging (not when updated from device)
+                if (!updatingFromDevice) {
+                    seekBar?.let {
+                        currentLedSpeed = it.progress
+                        sendLedSettings()  // Non-throttled to ensure final value is sent
+                    }
+                }
+            }
         })
         
         // Color pickers
@@ -473,12 +532,19 @@ class MainActivityRedesign : AppCompatActivity() {
             override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
                 val db = progress - 12
                 label.text = "${if (db >= 0) "+" else ""}$db dB"
-                if (fromUser) {
+                if (fromUser && !updatingFromDevice) {
                     sendEq()
+                    // Update preset display to show "Custom" if values don't match any preset
+                    updatePresetFromEq()
                 }
             }
             override fun onStartTrackingTouch(seekBar: SeekBar?) {}
-            override fun onStopTrackingTouch(seekBar: SeekBar?) {}
+            override fun onStopTrackingTouch(seekBar: SeekBar?) {
+                // Only send final EQ value when user stops dragging (not when updated from device)
+                if (!updatingFromDevice) {
+                    sendEqFinal()
+                }
+            }
         })
     }
 
@@ -502,26 +568,67 @@ class MainActivityRedesign : AppCompatActivity() {
                 navSoundText.setTextColor(inactiveColor)
                 navLedIcon.setColorFilter(accentColor)
                 navLedText.setTextColor(accentColor)
+                // Refresh LED UI to ensure it shows current values
+                refreshLedUI()
             }
         }
     }
+    
+    // Refresh LED UI with current values - called when switching to LED tab
+    private fun refreshLedUI() {
+        updatingFromDevice = true
+        try {
+            // Update effect selection
+            if (currentEffectId < ledEffectNames.size) {
+                tvSelectedEffect?.text = ledEffectNames[currentEffectId]
+                tvCurrentEffect.text = ledEffectNames[currentEffectId]
+            } else if (currentEffectId == LED_EFFECT_OFF) {
+                tvSelectedEffect?.text = "Off"
+                tvCurrentEffect.text = "Off"
+            }
+            ledEffectAdapter?.setSelectedEffect(currentEffectId)
+            updateEffectButtonHighlight(currentEffectId)
+            
+            // Update sliders
+            seekBrightness.progress = currentLedBrightness
+            tvBrightness.text = currentLedBrightness.toString()
+            seekLedSpeed.progress = currentLedSpeed
+            tvLedSpeed.text = currentLedSpeed.toString()
+            
+            // Update colors
+            updateColorPreview(viewColor1, currentLedColor1)
+            updateColorPreview(viewColor2, currentLedColor2)
+            
+            // Update gradient
+            if (currentGradientType < gradientTypeNames.size) {
+                spinnerGradient.setSelection(currentGradientType)
+            }
+        } finally {
+            updatingFromDevice = false
+        }
+    }
 
+    // EQ preset definitions with (id, name, [bass, mid, treble] as 0-100 values)
+    private val eqPresets = listOf(
+        Triple(R.id.presetBalanced, "Balanced", intArrayOf(50, 50, 50)),
+        Triple(R.id.presetDeepBass, "Deep Bass", intArrayOf(85, 45, 40)),
+        Triple(R.id.presetClearVocals, "Vocals", intArrayOf(40, 70, 55)),
+        Triple(R.id.presetBrightClear, "Bright", intArrayOf(45, 55, 80)),
+        Triple(R.id.presetPunchy, "Punchy", intArrayOf(75, 40, 70)),
+        Triple(R.id.presetWarm, "Warm", intArrayOf(65, 55, 35)),
+        Triple(R.id.presetStudio, "Studio", intArrayOf(50, 52, 50)),
+        Triple(R.id.presetClub, "Club", intArrayOf(80, 45, 65)),
+        Triple(R.id.presetGaming, "Gaming", intArrayOf(75, 55, 70))
+    )
+    
     private fun setupEqPresets() {
-        val presets = listOf(
-            Triple(R.id.presetBalanced, "Balanced", intArrayOf(50, 50, 50)),
-            Triple(R.id.presetDeepBass, "Deep Bass", intArrayOf(85, 45, 40)),
-            Triple(R.id.presetClearVocals, "Vocals", intArrayOf(40, 70, 55)),
-            Triple(R.id.presetBrightClear, "Bright", intArrayOf(45, 55, 80)),
-            Triple(R.id.presetPunchy, "Punchy", intArrayOf(75, 40, 70)),
-            Triple(R.id.presetWarm, "Warm", intArrayOf(65, 55, 35)),
-            Triple(R.id.presetStudio, "Studio", intArrayOf(50, 52, 50)),
-            Triple(R.id.presetClub, "Club", intArrayOf(80, 45, 65)),
-            Triple(R.id.presetGaming, "Gaming", intArrayOf(75, 55, 70))
-        )
-
-        presets.forEachIndexed { index, (id, name, values) ->
-            findViewById<FrameLayout>(id)?.setOnClickListener {
-                applyEqPreset(index, name, values[0], values[1], values[2])
+        eqPresets.forEachIndexed { index, (id, name, values) ->
+            val button = findViewById<FrameLayout>(id)
+            button?.let {
+                presetButtonMap[index] = it
+                it.setOnClickListener {
+                    applyEqPreset(index, name, values[0], values[1], values[2])
+                }
             }
         }
 
@@ -538,11 +645,103 @@ class MainActivityRedesign : AppCompatActivity() {
             }
         }
 
-        // Custom presets
-        findViewById<FrameLayout>(R.id.presetCustom1)?.setOnClickListener { loadCustomPreset(1) }
-        findViewById<FrameLayout>(R.id.presetCustom1)?.setOnLongClickListener { saveCustomPreset(1); true }
-        findViewById<FrameLayout>(R.id.presetCustom2)?.setOnClickListener { loadCustomPreset(2) }
-        findViewById<FrameLayout>(R.id.presetCustom2)?.setOnLongClickListener { saveCustomPreset(2); true }
+        // Custom presets (100+slot)
+        findViewById<FrameLayout>(R.id.presetCustom1)?.let {
+            presetButtonMap[101] = it
+            it.setOnClickListener { loadCustomPreset(1) }
+            it.setOnLongClickListener { saveCustomPreset(1); true }
+        }
+        findViewById<FrameLayout>(R.id.presetCustom2)?.let {
+            presetButtonMap[102] = it
+            it.setOnClickListener { loadCustomPreset(2) }
+            it.setOnLongClickListener { saveCustomPreset(2); true }
+        }
+    }
+    
+    /**
+     * Detect if current EQ values match any preset. Returns preset index or -1 for Custom.
+     */
+    private fun detectMatchingPreset(): Int {
+        val currentBass = seekBass.progress  // 0-24 (representing -12 to +12 dB)
+        val currentMid = seekMid.progress
+        val currentTreble = seekTreble.progress
+        
+        android.util.Log.d("EQ", "Detecting preset: current bass=$currentBass, mid=$currentMid, treble=$currentTreble")
+        
+        eqPresets.forEachIndexed { index, (_, name, values) ->
+            // Convert preset values (0-100) to slider progress (0-24)
+            val bassDb = ((values[0] - 50) * 12 / 50).coerceIn(-12, 12)
+            val midDb = ((values[1] - 50) * 12 / 50).coerceIn(-12, 12)
+            val trebleDb = ((values[2] - 50) * 12 / 50).coerceIn(-12, 12)
+            
+            val presetBass = bassDb + 12
+            val presetMid = midDb + 12
+            val presetTreble = trebleDb + 12
+            
+            android.util.Log.d("EQ", "  Preset $name: bass=$presetBass, mid=$presetMid, treble=$presetTreble (match=${currentBass == presetBass && currentMid == presetMid && currentTreble == presetTreble})")
+            
+            if (currentBass == presetBass && currentMid == presetMid && currentTreble == presetTreble) {
+                android.util.Log.d("EQ", "  -> Matched preset: $name (index=$index)")
+                return index
+            }
+        }
+        
+        // Check custom presets
+        for (slot in 1..2) {
+            if (prefs.contains("custom_${slot}_bass")) {
+                val bass = prefs.getInt("custom_${slot}_bass", 50)
+                val mid = prefs.getInt("custom_${slot}_mid", 50)
+                val treble = prefs.getInt("custom_${slot}_treble", 50)
+                
+                val bassDb = ((bass - 50) * 12 / 50).coerceIn(-12, 12)
+                val midDb = ((mid - 50) * 12 / 50).coerceIn(-12, 12)
+                val trebleDb = ((treble - 50) * 12 / 50).coerceIn(-12, 12)
+                
+                if (currentBass == bassDb + 12 && currentMid == midDb + 12 && currentTreble == trebleDb + 12) {
+                    android.util.Log.d("EQ", "  -> Matched custom preset slot $slot")
+                    return 100 + slot
+                }
+            }
+        }
+        
+        android.util.Log.d("EQ", "  -> No match, returning Custom")
+        return -1  // Custom (no match)
+    }
+    
+    /**
+     * Update preset display and highlight based on current EQ values.
+     */
+    private fun updatePresetFromEq() {
+        val matchedPreset = detectMatchingPreset()
+        currentMatchedPresetId = matchedPreset
+        
+        // Update display text
+        val presetName = when {
+            matchedPreset == -1 -> "Custom"
+            matchedPreset >= 100 -> prefs.getString("custom_${matchedPreset - 100}_name", "Custom ${matchedPreset - 100}") ?: "Custom"
+            matchedPreset < eqPresets.size -> eqPresets[matchedPreset].second
+            else -> "Custom"
+        }
+        tvCurrentPreset.text = presetName
+        currentPresetId = matchedPreset
+        
+        // Update preset button highlights
+        updatePresetButtonHighlight(matchedPreset)
+    }
+    
+    /**
+     * Highlight the currently selected preset button.
+     */
+    private fun updatePresetButtonHighlight(selectedPresetId: Int) {
+        presetButtonMap.forEach { (presetId, button) ->
+            if (presetId == selectedPresetId) {
+                // Highlighted state
+                button.setBackgroundResource(R.drawable.bdk_preset_item_bg_selected)
+            } else {
+                // Normal state
+                button.setBackgroundResource(R.drawable.bdk_preset_item_bg)
+            }
+        }
     }
     
     // Emoji map for effects
@@ -870,6 +1069,7 @@ class MainActivityRedesign : AppCompatActivity() {
 
     private fun applyEqPreset(presetId: Int, name: String, bass: Int, mid: Int, treble: Int) {
         currentPresetId = presetId
+        currentMatchedPresetId = presetId
         tvCurrentPreset.text = name
 
         // Convert 0-100 to dB range
@@ -885,8 +1085,10 @@ class MainActivityRedesign : AppCompatActivity() {
         tvMidLabel.text = "${if (midDb >= 0) "+" else ""}$midDb dB"
         tvTrebleLabel.text = "${if (trebleDb >= 0) "+" else ""}$trebleDb dB"
 
+        // Update preset button highlighting
+        updatePresetButtonHighlight(presetId)
+        
         sendEq()
-        // Toast removed for cleaner UX
     }
 
     private fun applyLedEffect(effectId: Int, name: String) {
@@ -973,7 +1175,10 @@ class MainActivityRedesign : AppCompatActivity() {
         val bluetoothManager = getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
         val device = bluetoothManager.adapter?.getRemoteDevice(address) ?: return
         
-        bluetoothGatt = device.connectGatt(this, false, gattCallback)
+        // IMPORTANT: Explicitly use TRANSPORT_LE to force BLE connection
+        // Without this, Android may try to use BR/EDR (Classic BT) when A2DP is connected,
+        // which causes PSM 31 (ATT over BR/EDR) requests that ESP32 doesn't support
+        bluetoothGatt = device.connectGatt(this, false, gattCallback, BluetoothDevice.TRANSPORT_LE)
     }
 
     private val gattCallback = object : BluetoothGattCallback() {
@@ -997,6 +1202,16 @@ class MainActivityRedesign : AppCompatActivity() {
                         OtaActivity.sharedGatt = null
                         OtaActivity.sharedCmdChar = null
                         updateConnectionStatus(false)
+                        
+                        // Clear BLE command queue
+                        bleCommandQueue.clear()
+                        bleWriteInProgress = false
+                        
+                        // Go back to pairing screen
+                        val intent = Intent(this@MainActivityRedesign, ConnectionActivity::class.java)
+                        intent.flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_NEW_TASK
+                        startActivity(intent)
+                        finish()
                     }
                 }
             }
@@ -1106,6 +1321,9 @@ class MainActivityRedesign : AppCompatActivity() {
                 OtaActivity.handleOtaWriteComplete(success)
                 // Sound write complete always needs to be signaled so the wait doesn't hang
                 handleSoundWriteComplete()
+                // Mark queue as ready and process next command
+                onBleWriteComplete()
+                processNextBleCommand()
             }
         }
     }
@@ -1144,7 +1362,16 @@ class MainActivityRedesign : AppCompatActivity() {
                             tvBassLabel.text = "${if (eq.bass >= 0) "+" else ""}${eq.bass} dB"
                             tvMidLabel.text = "${if (eq.mid >= 0) "+" else ""}${eq.mid} dB"
                             tvTrebleLabel.text = "${if (eq.treble >= 0) "+" else ""}${eq.treble} dB"
-                        } finally {
+                            
+                            // Update preset display (may show "Custom" if values changed via knob)
+                            updatePresetFromEq()
+                            
+                            // Delay resetting flag to ensure all UI updates complete
+                            android.os.Handler(android.os.Looper.getMainLooper()).post {
+                                updatingFromDevice = false
+                            }
+                        } catch (e: Exception) {
+                            android.util.Log.e("BLE", "Error updating EQ UI", e)
                             updatingFromDevice = false
                         }
                     }
@@ -1218,7 +1445,13 @@ class MainActivityRedesign : AppCompatActivity() {
                             }
                             
                             android.util.Log.d("LED", "Synced: effect=${led.effectId}, brightness=${led.brightness}, speed=${led.speed}")
-                        } finally {
+                            
+                            // Delay resetting flag to let spinner listeners process first
+                            android.os.Handler(android.os.Looper.getMainLooper()).post {
+                                updatingFromDevice = false
+                            }
+                        } catch (e: Exception) {
+                            android.util.Log.e("LED", "Error updating LED UI", e)
                             updatingFromDevice = false
                         }
                     }
@@ -1226,10 +1459,19 @@ class MainActivityRedesign : AppCompatActivity() {
             }
             BleUnifiedProtocol.Resp.STATUS_SOUND -> {
                 if (payload.isNotEmpty()) {
-                    soundStatus = payload[0].toInt() and 0xFF
-                    android.util.Log.d("Sound", "Updated soundStatus to: $soundStatus")
+                    val newStatus = payload[0].toInt() and 0xFF
+                    android.util.Log.d("Sound", "STATUS_SOUND received: old=$soundStatus, new=$newStatus")
+                    soundStatus = newStatus
                     runOnUiThread {
-                        deviceInfoBottomSheet?.updateSoundStatus(soundStatus)
+                        // Try the activity's reference first, then the static instance
+                        val sheet = deviceInfoBottomSheet ?: DeviceInfoBottomSheet.currentInstance
+                        android.util.Log.d("Sound", "Updating UI: sheet=${sheet != null}, isAdded=${sheet?.isAdded}, isVisible=${sheet?.isVisible}")
+                        if (sheet != null && sheet.isAdded) {
+                            sheet.updateSoundStatus(soundStatus)
+                            android.util.Log.d("Sound", "Called updateSoundStatus on sheet")
+                        } else {
+                            android.util.Log.w("Sound", "Sheet not available for update")
+                        }
                     }
                 }
             }
@@ -1292,6 +1534,9 @@ class MainActivityRedesign : AppCompatActivity() {
                             tvMidLabel.text = "${if (status.eq.mid >= 0) "+" else ""}${status.eq.mid} dB"
                             tvTrebleLabel.text = "${if (status.eq.treble >= 0) "+" else ""}${status.eq.treble} dB"
                             
+                            // Detect matching preset based on EQ values
+                            updatePresetFromEq()
+                            
                             // Update control
                             val b = status.controlByte
                             bassBoostEnabled = (b and 0x01) != 0
@@ -1303,7 +1548,12 @@ class MainActivityRedesign : AppCompatActivity() {
                             if (status.led.effectId < ledEffectNames.size) {
                                 tvSelectedEffect?.text = ledEffectNames[status.led.effectId]
                                 tvCurrentEffect.text = ledEffectNames[status.led.effectId]
+                            } else if (status.led.effectId == LED_EFFECT_OFF) {
+                                tvSelectedEffect?.text = "Off"
+                                tvCurrentEffect.text = "Off"
                             }
+                            ledEffectAdapter?.setSelectedEffect(status.led.effectId)
+                            updateEffectButtonHighlight(status.led.effectId)
                             currentLedBrightness = status.led.brightness
                             seekBrightness.progress = status.led.brightness
                             tvBrightness.text = status.led.brightness.toString()
@@ -1315,6 +1565,9 @@ class MainActivityRedesign : AppCompatActivity() {
                             currentLedColor2 = Color.rgb(status.led.r2, status.led.g2, status.led.b2)
                             updateColorPreview(viewColor2, currentLedColor2)
                             currentGradientType = status.led.gradient
+                            if (status.led.gradient < gradientTypeNames.size) {
+                                spinnerGradient.setSelection(status.led.gradient)
+                            }
                             
                             // Update sound
                             soundStatus = status.soundStatus
@@ -1328,7 +1581,13 @@ class MainActivityRedesign : AppCompatActivity() {
                             currentFirmwareVersion = status.firmwareVersion
                             
                             android.util.Log.d("BLE", "Full status synced: name=${status.deviceName}, fw=${status.firmwareVersion}")
-                        } finally {
+                            
+                            // Delay resetting flag to let spinner listeners process first
+                            android.os.Handler(android.os.Looper.getMainLooper()).post {
+                                updatingFromDevice = false
+                            }
+                        } catch (e: Exception) {
+                            android.util.Log.e("BLE", "Error updating full status UI", e)
                             updatingFromDevice = false
                         }
                     }
@@ -1430,6 +1689,10 @@ class MainActivityRedesign : AppCompatActivity() {
     
     // === Unified BLE Protocol Send ===
     
+    /**
+     * Queue a BLE command and process it when ready.
+     * Commands are processed sequentially to avoid BLE write collisions.
+     */
     @SuppressLint("MissingPermission")
     private fun sendUnifiedCommand(data: ByteArray) {
         if (!isConnected || cmdChar == null || bluetoothGatt == null) {
@@ -1437,21 +1700,86 @@ class MainActivityRedesign : AppCompatActivity() {
             return
         }
         
-        android.util.Log.d("BLE", "Sending command: ${data.joinToString(" ") { String.format("%02X", it) }}")
+        // Add to queue and try to process
+        bleCommandQueue.offer(data)
+        processNextBleCommand()
+    }
+    
+    /**
+     * Send a throttled command (for sliders). Only queues if enough time has passed.
+     * Also replaces any pending command of the same type in the queue.
+     */
+    @SuppressLint("MissingPermission")
+    private fun sendThrottledCommand(data: ByteArray, commandType: Byte): Boolean {
+        val now = System.currentTimeMillis()
+        val lastTime = when (commandType) {
+            BleUnifiedProtocol.Cmd.SET_LED -> lastBrightnessCommand
+            BleUnifiedProtocol.Cmd.SET_LED_BRIGHT -> lastBrightnessCommand
+            BleUnifiedProtocol.Cmd.SET_EQ -> lastEqCommand
+            else -> 0L
+        }
         
-        cmdChar?.let {
-            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
-                bluetoothGatt?.writeCharacteristic(
-                    it,
-                    data,
-                    BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT
-                )
-            } else {
-                @Suppress("DEPRECATION")
-                it.value = data
-                @Suppress("DEPRECATION")
-                bluetoothGatt?.writeCharacteristic(it)
+        if (now - lastTime < SLIDER_THROTTLE_MS) {
+            // Too soon, skip this update (or replace pending)
+            return false
+        }
+        
+        // Update timestamp
+        when (commandType) {
+            BleUnifiedProtocol.Cmd.SET_LED, 
+            BleUnifiedProtocol.Cmd.SET_LED_BRIGHT -> lastBrightnessCommand = now
+            BleUnifiedProtocol.Cmd.SET_EQ -> lastEqCommand = now
+        }
+        
+        sendUnifiedCommand(data)
+        return true
+    }
+    
+    /**
+     * Process the next command in the queue if not busy.
+     */
+    @SuppressLint("MissingPermission")
+    private fun processNextBleCommand() {
+        synchronized(bleQueueLock) {
+            if (bleWriteInProgress) return
+            
+            val data = bleCommandQueue.poll() ?: return
+            bleWriteInProgress = true
+            
+            android.util.Log.d("BLE", "Sending command: ${data.joinToString(" ") { String.format("%02X", it) }}")
+            
+            cmdChar?.let { char ->
+                val success = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+                    bluetoothGatt?.writeCharacteristic(
+                        char,
+                        data,
+                        BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT
+                    ) == BluetoothStatusCodes.SUCCESS
+                } else {
+                    @Suppress("DEPRECATION")
+                    char.value = data
+                    @Suppress("DEPRECATION")
+                    bluetoothGatt?.writeCharacteristic(char) == true
+                }
+                
+                if (success != true) {
+                    android.util.Log.e("BLE", "writeCharacteristic failed")
+                    bleWriteInProgress = false
+                    // Try next command
+                    handler.post { processNextBleCommand() }
+                }
+            } ?: run {
+                bleWriteInProgress = false
             }
+        }
+    }
+    
+    /**
+     * Called when a write completes - signals queue to send next command.
+     */
+    private fun onBleWriteComplete() {
+        synchronized(bleQueueLock) {
+            bleWriteInProgress = false
         }
     }
 
@@ -1461,6 +1789,21 @@ class MainActivityRedesign : AppCompatActivity() {
             android.util.Log.w("BLE", "Cannot send EQ: isConnected=$isConnected, cmdChar=${cmdChar != null}")
             return
         }
+
+        val bass = seekBass.progress - 12
+        val mid = seekMid.progress - 12
+        val treble = seekTreble.progress - 12
+
+        val data = BleUnifiedProtocol.buildSetEq(bass, mid, treble)
+        sendThrottledCommand(data, BleUnifiedProtocol.Cmd.SET_EQ)
+    }
+    
+    /**
+     * Non-throttled EQ send - used on onStopTrackingTouch to ensure final value is sent.
+     */
+    @SuppressLint("MissingPermission")
+    private fun sendEqFinal() {
+        if (!isConnected || cmdChar == null || bluetoothGatt == null) return
 
         val bass = seekBass.progress - 12
         val mid = seekMid.progress - 12
@@ -1487,7 +1830,9 @@ class MainActivityRedesign : AppCompatActivity() {
         }
         
         currentLedBrightness = brightness
-        sendLedSettings()
+        // Send brightness-only command to avoid resetting the effect
+        val data = BleUnifiedProtocol.buildSetLedBrightness(brightness)
+        sendThrottledCommand(data, BleUnifiedProtocol.Cmd.SET_LED_BRIGHT)
     }
     
     @SuppressLint("MissingPermission")
@@ -1506,6 +1851,29 @@ class MainActivityRedesign : AppCompatActivity() {
             b2 = Color.blue(currentLedColor2),
             gradient = currentGradientType
         ))
+    }
+    
+    /**
+     * Throttled version of sendLedSettings for slider changes.
+     * Prevents BLE write collisions when dragging sliders quickly.
+     */
+    @SuppressLint("MissingPermission")
+    private fun sendLedSettingsThrottled() {
+        if (!isConnected || cmdChar == null || bluetoothGatt == null) return
+
+        val data = BleUnifiedProtocol.buildSetLed(
+            effectId = currentEffectId,
+            brightness = currentLedBrightness,
+            speed = currentLedSpeed,
+            r1 = Color.red(currentLedColor1),
+            g1 = Color.green(currentLedColor1),
+            b1 = Color.blue(currentLedColor1),
+            r2 = Color.red(currentLedColor2),
+            g2 = Color.green(currentLedColor2),
+            b2 = Color.blue(currentLedColor2),
+            gradient = currentGradientType
+        )
+        sendThrottledCommand(data, BleUnifiedProtocol.Cmd.SET_LED)
     }
 
     // === Settings Result Handler ===
@@ -1566,14 +1934,25 @@ class MainActivityRedesign : AppCompatActivity() {
         val a2dp = bluetoothA2dp ?: return
         val device = a2dpDevice ?: return
         
+        // On Android 12+, check if we need CDM association first
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && !hasCdmAssociation && !cdmAssociationRequested) {
+            // Try to request CDM association for codec access
+            requestCdmAssociation(device)
+        }
+        
         try {
             val getCodecStatusMethod = a2dp.javaClass.getMethod("getCodecStatus", BluetoothDevice::class.java)
             val codecStatus = getCodecStatusMethod.invoke(a2dp, device)
             
-            if (codecStatus != null) {
-                val getCodecConfigMethod = codecStatus.javaClass.getMethod("getCodecConfig")
-                val codecConfig = getCodecConfigMethod.invoke(codecStatus)
-                
+            if (codecStatus == null) {
+                // Codec status not available - use fallback from saved prefs or BLE status
+                android.util.Log.d("Codec", "Codec status not available from system, using fallback")
+                return
+            }
+            
+            val getCodecConfigMethod = codecStatus.javaClass.getMethod("getCodecConfig")
+            val codecConfig = getCodecConfigMethod.invoke(codecStatus)
+            
                 if (codecConfig != null) {
                     // Get codec type
                     val getCodecTypeMethod = codecConfig.javaClass.getMethod("getCodecType")
@@ -1649,10 +2028,99 @@ class MainActivityRedesign : AppCompatActivity() {
                     
                     android.util.Log.d("Codec", "Audio info: $currentCodecName, $currentSampleRate, $currentBitsPerSample, $currentChannelMode, $currentPlaybackQuality")
                 }
+        } catch (e: java.lang.reflect.InvocationTargetException) {
+            // Android 12+ requires CDM association for getCodecStatus
+            val cause = e.cause
+            if (cause is SecurityException && cause.message?.contains("CDM") == true) {
+                android.util.Log.d("Codec", "CDM association required - requesting association")
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && !cdmAssociationRequested) {
+                    a2dpDevice?.let { requestCdmAssociation(it) }
+                }
+            } else {
+                android.util.Log.w("Codec", "Failed to get codec status: ${cause?.message}")
+            }
+        } catch (e: SecurityException) {
+            // Direct SecurityException on some devices - request CDM association
+            android.util.Log.d("Codec", "Permission denied for codec status - requesting CDM association")
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && !cdmAssociationRequested) {
+                a2dpDevice?.let { requestCdmAssociation(it) }
             }
         } catch (e: Exception) {
-            android.util.Log.e("Codec", "Failed to get codec status", e)
+            android.util.Log.w("Codec", "Failed to get codec status: ${e.message}")
         }
+    }
+    
+    /**
+     * Request Companion Device Manager association for the Bluetooth device.
+     * This is required on Android 12+ to access A2DP codec information.
+     */
+    @SuppressLint("MissingPermission")
+    private fun requestCdmAssociation(device: BluetoothDevice) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return
+        
+        val cdm = companionDeviceManager ?: return
+        
+        // Check if we already have an association for this device
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                // Android 13+: Use myAssociations
+                val associations = cdm.myAssociations
+                val deviceAddress = device.address
+                val hasAssociation = associations.any { assoc ->
+                    assoc.deviceMacAddress?.toString()?.equals(deviceAddress, ignoreCase = true) == true
+                }
+                if (hasAssociation) {
+                    android.util.Log.i("CDM", "Already have CDM association for device")
+                    hasCdmAssociation = true
+                    prefs.edit().putBoolean("cdm_association", true).apply()
+                    return
+                }
+            }
+        } catch (e: Exception) {
+            android.util.Log.w("CDM", "Error checking existing associations: ${e.message}")
+        }
+        
+        cdmAssociationRequested = true
+        
+        // Create device filter matching the speaker by name
+        val deviceFilter = BluetoothDeviceFilter.Builder()
+            .setNamePattern(Pattern.compile(".*BDK.*|.*SPEAKER.*|.*${device.name?.replace(" ", ".*")}.*", Pattern.CASE_INSENSITIVE))
+            .build()
+        
+        val associationRequest = AssociationRequest.Builder()
+            .addDeviceFilter(deviceFilter)
+            .setSingleDevice(true)  // We want exactly this device
+            .build()
+        
+        android.util.Log.i("CDM", "Requesting CDM association for: ${device.name}")
+        
+        cdm.associate(associationRequest, object : CompanionDeviceManager.Callback() {
+            @Deprecated("Deprecated in API 33")
+            override fun onDeviceFound(chooserLauncher: IntentSender) {
+                try {
+                    cdmAssociationLauncher.launch(
+                        IntentSenderRequest.Builder(chooserLauncher).build()
+                    )
+                } catch (e: Exception) {
+                    android.util.Log.e("CDM", "Failed to launch association dialog: ${e.message}")
+                    cdmAssociationRequested = false
+                }
+            }
+            
+            override fun onAssociationCreated(associationInfo: AssociationInfo) {
+                android.util.Log.i("CDM", "CDM association created: ${associationInfo.id}")
+                hasCdmAssociation = true
+                prefs.edit().putBoolean("cdm_association", true).apply()
+                runOnUiThread {
+                    updateCodecFromSystem()
+                }
+            }
+            
+            override fun onFailure(error: CharSequence?) {
+                android.util.Log.w("CDM", "CDM association failed: $error")
+                cdmAssociationRequested = false
+            }
+        }, handler)
     }
     
     @Suppress("DEPRECATION")

@@ -110,7 +110,7 @@
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
-                        android:text="Balanced"
+                        android:text="---"
                         android:textSize="28sp"
                         android:textStyle="bold"
                         android:textColor="@color/bdk_accent_primary"
@@ -216,54 +216,42 @@
                     </LinearLayout>
                 </LinearLayout>
 
-                <!-- EQ Presets Grid -->
-                <include layout="@layout/section_eq_presets" />
-
-                <!-- Fine Tune Section (Collapsible) -->
+                <!-- EQ Section with rounded container -->
                 <LinearLayout
-                    android:id="@+id/sectionFineTune"
+                    android:id="@+id/sectionEqSliders"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:orientation="vertical"
-                    android:layout_marginTop="24dp">
-
-                    <LinearLayout
-                        android:id="@+id/btnFineTune"
-                        android:layout_width="match_parent"
+                    android:layout_marginTop="16dp"
+                    android:background="@drawable/bdk_eq_container"
+                    android:padding="16dp">
+                    
+                    <TextView
+                        android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:orientation="horizontal"
-                        android:gravity="center_vertical"
-                        android:padding="12dp"
-                        android:background="@drawable/bdk_card_glass">
+                        android:text="EQ"
+                        android:textSize="13sp"
+                        android:textStyle="bold"
+                        android:textColor="@color/bdk_text_secondary"
+                        android:letterSpacing="0.1"
+                        android:layout_marginBottom="12dp" />
 
-                        <TextView
-                            android:layout_width="0dp"
-                            android:layout_height="wrap_content"
-                            android:layout_weight="1"
-                            android:text="Fine Tune EQ"
-                            android:textSize="15sp"
-                            android:textColor="@color/bdk_text_primary" />
-
-                        <TextView
-                            android:id="@+id/tvFineTuneArrow"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="▼"
-                            android:textSize="12sp"
-                            android:textColor="@color/bdk_text_tertiary" />
-                    </LinearLayout>
-
-                    <LinearLayout
-                        android:id="@+id/fineTuneContent"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:orientation="vertical"
-                        android:visibility="gone"
-                        android:paddingTop="16dp">
-
-                        <include layout="@layout/section_eq_sliders" />
-                    </LinearLayout>
+                    <include layout="@layout/section_eq_sliders" />
                 </LinearLayout>
+
+                <!-- Presets Section -->
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="PRESETS"
+                    android:textSize="11sp"
+                    android:textColor="@color/bdk_text_tertiary"
+                    android:letterSpacing="0.15"
+                    android:layout_marginTop="24dp"
+                    android:layout_marginBottom="8dp" />
+
+                <!-- EQ Presets Grid -->
+                <include layout="@layout/section_eq_presets" />
 
             </LinearLayout>
         </ScrollView>
@@ -275,7 +263,7 @@
             android:layout_height="match_parent"
             android:fillViewport="true"
             android:scrollbars="none"
-            android:visibility="gone">
+            android:visibility="invisible">
 
             <LinearLayout
                 android:layout_width="match_parent"

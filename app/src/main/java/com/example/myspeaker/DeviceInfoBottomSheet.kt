@@ -70,6 +70,10 @@ class DeviceInfoBottomSheet : BottomSheetDialogFragment() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         
+        // Register this instance for BLE updates
+        currentInstance = this
+        android.util.Log.d("Sound", "DeviceInfoBottomSheet: registered as currentInstance")
+        
         // Register file picker launcher
         pickSoundLauncher = registerForActivityResult(
             ActivityResultContracts.GetContent()
@@ -158,12 +162,32 @@ class DeviceInfoBottomSheet : BottomSheetDialogFragment() {
     
     override fun onResume() {
         super.onResume()
+        // Register as current instance for BLE updates
+        currentInstance = this
+        
         // Sync with latest sound status from MainActivity when becoming visible
         // Get fresh sound status from activity
         val soundStatus = (activity as? MainActivity)?.getSoundStatus()
             ?: (activity as? MainActivityRedesign)?.getSoundStatus()
         soundStatus?.let { status ->
             updateSoundStatus(status)
+        }
+    }
+    
+    override fun onPause() {
+        super.onPause()
+        // Unregister when not visible
+        if (currentInstance == this) {
+            currentInstance = null
+            android.util.Log.d("Sound", "DeviceInfoBottomSheet: unregistered from currentInstance")
+        }
+    }
+    
+    override fun onDestroy() {
+        super.onDestroy()
+        // Ensure cleanup
+        if (currentInstance == this) {
+            currentInstance = null
         }
     }
     
@@ -309,6 +333,7 @@ class DeviceInfoBottomSheet : BottomSheetDialogFragment() {
      * @param status bit 0-3 = sound exists flags, bit 7 = muted
      */
     fun updateSoundStatus(status: Int) {
+        android.util.Log.d("Sound", "DeviceInfoBottomSheet.updateSoundStatus: status=0x${String.format("%02X", status)}, views: startup=${tvStartupStatus != null}, pairing=${tvPairingStatus != null}, connected=${tvConnectedStatus != null}, maxVol=${tvMaxVolStatus != null}")
         updatingFromDevice = true
         try {
             switchMuteSound?.isChecked = (status and 0x80) != 0
@@ -317,11 +342,15 @@ class DeviceInfoBottomSheet : BottomSheetDialogFragment() {
             val hasPairing = (status and 0x02) != 0
             val hasConnected = (status and 0x04) != 0
             val hasMaxVol = (status and 0x08) != 0
+            
+            android.util.Log.d("Sound", "Sound flags: startup=$hasStartup, pairing=$hasPairing, connected=$hasConnected, maxVol=$hasMaxVol")
 
             tvStartupStatus?.text = if (hasStartup) "✓" else "—"
             tvPairingStatus?.text = if (hasPairing) "✓" else "—"
             tvConnectedStatus?.text = if (hasConnected) "✓" else "—"
             tvMaxVolStatus?.text = if (hasMaxVol) "✓" else "—"
+            
+            android.util.Log.d("Sound", "Updated text views: startup=${tvStartupStatus?.text}, pairing=${tvPairingStatus?.text}, connected=${tvConnectedStatus?.text}, maxVol=${tvMaxVolStatus?.text}")
 
             context?.let { ctx ->
                 val successColor = ContextCompat.getColor(ctx, R.color.success)
@@ -402,6 +431,11 @@ class DeviceInfoBottomSheet : BottomSheetDialogFragment() {
 
     companion object {
         const val TAG = "DeviceInfoBottomSheet"
+        
+        // Static reference to currently visible sheet for BLE updates
+        @Volatile
+        var currentInstance: DeviceInfoBottomSheet? = null
+            private set
 
         fun newInstance(
             isConnected: Boolean,

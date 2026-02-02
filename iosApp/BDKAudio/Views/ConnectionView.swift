@@ -1,105 +1,385 @@
 import SwiftUI
+import CoreBluetooth
 import sharedKit
 
 struct ConnectionView: View {
     @ObservedObject var viewModel: ConnectionViewModel
+    
+    // Scanning state
     @State private var isScanning = false
-    @State private var pulseAnimation = false
+    @State private var showNoDeviceOverlay = false
+    @State private var showBluetoothOffAlert = false
+    @State private var scanTimeoutTimer: Timer?
+    @State private var autoConnectTimer: Timer?
+    @State private var autoConnectCountdown = 4
+    
+    // Pulse animation - just opacity, no scale to prevent movement
+    @State private var pulsePhase: Double = 0.6
+    
+    private let scanTimeout: TimeInterval = 15.0
+    private let autoConnectDelay: TimeInterval = 4.0
+    
+    var body: some View {
+        GeometryReader { geometry in
+            ZStack {
+                // Background gradient
+                LinearGradient(
+                    gradient: Gradient(colors: [Color.black, Color(hex: "1a1a2e")]),
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+                .ignoresSafeArea()
+                
+                // Pulsing glow - positioned absolutely in center-top area
+                Circle()
+                    .fill(
+                        RadialGradient(
+                            colors: [
+                                Color.cyan.opacity(0.9),
+                                Color.cyan.opacity(0.5),
+                                Color.cyan.opacity(0.2),
+                                Color.clear
+                            ],
+                            center: .center,
+                            startRadius: 0,
+                            endRadius: 200
+                        )
+                    )
+                    .frame(width: 400, height: 400)
+                    .opacity(pulsePhase)
+                    .animation(
+                        Animation.easeInOut(duration: 1.8).repeatForever(autoreverses: true),
+                        value: pulsePhase
+                    )
+                    .position(x: geometry.size.width / 2, y: geometry.size.height * 0.35)
+                    .allowsHitTesting(false)
+                
+                // BDK Logo - positioned absolutely, not affected by pulse
+                VStack(spacing: 4) {
+                    Text("BDK")
+                        .font(.system(size: 48, weight: .bold))
+                        .foregroundColor(.white)
+                    Text("AUDIO")
+                        .font(.system(size: 20, weight: .medium))
+                        .foregroundColor(.cyan)
+                        .tracking(8)
+                }
+                .position(x: geometry.size.width / 2, y: geometry.size.height * 0.35)
+                
+                // Content area at bottom
+                VStack {
+                    Spacer()
+                    Spacer()
+                    
+                    // Status text and device list area
+                    VStack(spacing: 16) {
+                    if viewModel.discoveredDevices.count > 1 {
+                        // Multiple devices found - show list
+                        Text("Found \(viewModel.discoveredDevices.count) devices")
+                            .font(.headline)
+                            .foregroundColor(.cyan)
+                        Text("Select a device to connect")
+                            .font(.subheadline)
+                            .foregroundColor(.gray)
+                        
+                        ScrollView {
+                            VStack(spacing: 12) {
+                                ForEach(viewModel.discoveredDevices, id: \.identifier) { device in
+                                    DeviceRow(device: device) {
+                                        cancelAutoConnect()
+                                        viewModel.connect(to: device)
+                                    }
+                                }
+                            }
+                            .padding(.horizontal)
+                        }
+                        .frame(maxHeight: 200)
+                    } else if viewModel.discoveredDevices.count == 1 {
+                        // Single device found - show with auto-connect countdown
+                        Text("Found \(viewModel.discoveredDevices.first?.name ?? "device")")
+                            .font(.headline)
+                            .foregroundColor(.cyan)
+                        Text("Auto-connecting in \(autoConnectCountdown)s... Tap to connect now")
+                            .font(.subheadline)
+                            .foregroundColor(.gray)
+                        
+                        if let device = viewModel.discoveredDevices.first {
+                            DeviceRow(device: device) {
+                                cancelAutoConnect()
+                                viewModel.connect(to: device)
+                            }
+                            .padding(.horizontal)
+                        }
+                    } else if isScanning {
+                        // Searching
+                        Text("Searching for devices...")
+                            .font(.headline)
+                            .foregroundColor(.cyan)
+                        Text("Make sure your speaker is powered on")
+                            .font(.subheadline)
+                            .foregroundColor(.gray)
+                        
+                        ProgressView()
+                            .progressViewStyle(CircularProgressViewStyle(tint: .cyan))
+                            .scaleEffect(1.2)
+                            .padding(.top, 8)
+                    } else {
+                        // Not scanning
+                        Text("Connect to your speaker")
+                            .font(.headline)
+                            .foregroundColor(.gray)
+                    }
+                    }
+                    .frame(height: 180)
+                    
+                    Spacer()
+                } // End of content VStack
+            
+            // No Device Found Overlay
+            if showNoDeviceOverlay {
+                NoDeviceOverlay(
+                    onRetry: {
+                        hideNoDeviceOverlay()
+                        startScanning()
+                    },
+                    onManualSelect: {
+                        hideNoDeviceOverlay()
+                        // Could show a manual entry or just restart scan
+                        startScanning()
+                    }
+                )
+                .transition(.opacity)
+            }
+        } // End of ZStack
+        } // End of GeometryReader
+        .navigationBarHidden(true)
+        .onAppear {
+            startPulseAnimation()
+            checkBluetoothAndScan()
+        }
+        .onDisappear {
+            stopScanning()
+        }
+        .alert("Bluetooth is Off", isPresented: $showBluetoothOffAlert) {
+            Button("Open Settings") {
+                if let url = URL(string: UIApplication.openSettingsURLString) {
+                    UIApplication.shared.open(url)
+                }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Please turn on Bluetooth to connect to your BDK speaker.")
+        }
+        .onChange(of: viewModel.discoveredDevices.count) { oldCount, newCount in
+            handleDeviceCountChange(oldCount: oldCount, newCount: newCount)
+        }
+    }
+    
+    // MARK: - Bluetooth Check
+    
+    private func checkBluetoothAndScan() {
+        // Check if Bluetooth is on
+        if viewModel.centralManager.state == .poweredOn {
+            startScanning()
+        } else if viewModel.centralManager.state == .poweredOff {
+            showBluetoothOffAlert = true
+        } else {
+            // Wait a moment for Bluetooth to initialize
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                if viewModel.centralManager.state == .poweredOn {
+                    startScanning()
+                } else if viewModel.centralManager.state == .poweredOff {
+                    showBluetoothOffAlert = true
+                }
+            }
+        }
+    }
+    
+    // MARK: - Scanning
+    
+    private func startScanning() {
+        guard viewModel.centralManager.state == .poweredOn else {
+            showBluetoothOffAlert = true
+            return
+        }
+        
+        isScanning = true
+        showNoDeviceOverlay = false
+        viewModel.startScanning()
+        startPulseAnimation()
+        
+        // Start scan timeout
+        scanTimeoutTimer?.invalidate()
+        scanTimeoutTimer = Timer.scheduledTimer(withTimeInterval: scanTimeout, repeats: false) { _ in
+            handleScanTimeout()
+        }
+    }
+    
+    private func stopScanning() {
+        isScanning = false
+        viewModel.stopScanning()
+        scanTimeoutTimer?.invalidate()
+        scanTimeoutTimer = nil
+        cancelAutoConnect()
+    }
+    
+    private func handleScanTimeout() {
+        stopScanning()
+        
+        if viewModel.discoveredDevices.isEmpty {
+            withAnimation(.easeInOut(duration: 0.3)) {
+                showNoDeviceOverlay = true
+            }
+            stopPulseAnimation()
+        } else if viewModel.discoveredDevices.count == 1 {
+            // Auto-connect to the only device
+            if let device = viewModel.discoveredDevices.first {
+                viewModel.connect(to: device)
+            }
+        }
+    }
+    
+    // MARK: - Auto-Connect
+    
+    private func handleDeviceCountChange(oldCount: Int, newCount: Int) {
+        if newCount == 1 && oldCount == 0 {
+            // First device found - start auto-connect countdown
+            startAutoConnectCountdown()
+        } else if newCount > 1 {
+            // Multiple devices - cancel auto-connect
+            cancelAutoConnect()
+        }
+    }
+    
+    private func startAutoConnectCountdown() {
+        autoConnectCountdown = 4
+        
+        autoConnectTimer?.invalidate()
+        autoConnectTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { timer in
+            autoConnectCountdown -= 1
+            
+            if autoConnectCountdown <= 0 {
+                timer.invalidate()
+                autoConnectTimer = nil
+                
+                // Auto-connect if still only 1 device
+                if viewModel.discoveredDevices.count == 1,
+                   let device = viewModel.discoveredDevices.first {
+                    stopScanning()
+                    viewModel.connect(to: device)
+                }
+            }
+        }
+    }
+    
+    private func cancelAutoConnect() {
+        autoConnectTimer?.invalidate()
+        autoConnectTimer = nil
+        autoConnectCountdown = 4
+    }
+    
+    // MARK: - No Device Overlay
+    
+    private func hideNoDeviceOverlay() {
+        withAnimation(.easeInOut(duration: 0.2)) {
+            showNoDeviceOverlay = false
+        }
+        startPulseAnimation()
+    }
+    
+    // MARK: - Pulse Animation
+    
+    private func startPulseAnimation() {
+        // Just set to 1.0 - the .animation modifier on the Circle handles the animation
+        pulsePhase = 1.0
+    }
+    
+    private func stopPulseAnimation() {
+        pulsePhase = 0.4
+    }
+}
+
+// MARK: - No Device Overlay
+
+struct NoDeviceOverlay: View {
+    let onRetry: () -> Void
+    let onManualSelect: () -> Void
     
     var body: some View {
         ZStack {
-            // Background gradient
-            LinearGradient(
-                gradient: Gradient(colors: [Color.black, Color(hex: "1a1a2e")]),
-                startPoint: .top,
-                endPoint: .bottom
-            )
-            .ignoresSafeArea()
+            // Dimmed background
+            Color.black.opacity(0.6)
+                .ignoresSafeArea()
             
-            VStack(spacing: 30) {
-                // Logo and pulse animation
-                ZStack {
-                    // Pulse circles
-                    ForEach(0..<3) { index in
-                        Circle()
-                            .stroke(Color.cyan.opacity(0.3 - Double(index) * 0.1), lineWidth: 2)
-                            .frame(width: 150 + CGFloat(index) * 40, height: 150 + CGFloat(index) * 40)
-                            .scaleEffect(pulseAnimation ? 1.2 : 1.0)
-                            .opacity(pulseAnimation ? 0 : 1)
-                            .animation(
-                                Animation.easeOut(duration: 1.5)
-                                    .repeatForever(autoreverses: false)
-                                    .delay(Double(index) * 0.3),
-                                value: pulseAnimation
-                            )
-                    }
-                    
-                    // Speaker icon
-                    Image(systemName: "hifispeaker.2.fill")
-                        .resizable()
-                        .aspectRatio(contentMode: .fit)
-                        .frame(width: 80, height: 80)
-                        .foregroundColor(.cyan)
-                }
-                .padding(.top, 60)
+            // Card
+            VStack(spacing: 20) {
+                // Bluetooth off icon
+                Image(systemName: "antenna.radiowaves.left.and.right.slash")
+                    .font(.system(size: 50))
+                    .foregroundColor(.gray)
                 
-                Text("BDK Audio")
-                    .font(.system(size: 36, weight: .bold))
+                Text("No Device Found")
+                    .font(.title2.bold())
                     .foregroundColor(.white)
                 
-                Text(isScanning ? "Searching for devices..." : "Connect to your speaker")
+                Text("Make sure your BDK speaker is:")
                     .font(.subheadline)
                     .foregroundColor(.gray)
                 
-                // Device list
-                if !viewModel.discoveredDevices.isEmpty {
-                    ScrollView {
-                        VStack(spacing: 12) {
-                            ForEach(viewModel.discoveredDevices, id: \.identifier) { device in
-                                DeviceRow(device: device) {
-                                    viewModel.connect(to: device)
-                                }
-                            }
-                        }
-                        .padding(.horizontal)
-                    }
-                    .frame(maxHeight: 300)
+                VStack(alignment: .leading, spacing: 8) {
+                    BulletPoint(text: "Powered on")
+                    BulletPoint(text: "In pairing mode (LED blinking)")
+                    BulletPoint(text: "Within Bluetooth range")
+                    BulletPoint(text: "Not connected to another device")
                 }
+                .padding(.horizontal)
                 
-                Spacer()
-                
-                // Scan button
-                Button(action: {
-                    isScanning.toggle()
-                    if isScanning {
-                        pulseAnimation = true
-                        viewModel.startScanning()
-                    } else {
-                        pulseAnimation = false
-                        viewModel.stopScanning()
+                // Buttons
+                VStack(spacing: 12) {
+                    Button(action: onRetry) {
+                        Text("Try Again")
+                            .font(.headline)
+                            .foregroundColor(.black)
+                            .frame(maxWidth: .infinity)
+                            .padding()
+                            .background(Color(hex: "E0B0FF")) // Light purple like Android
+                            .cornerRadius(12)
                     }
-                }) {
-                    HStack {
-                        Image(systemName: isScanning ? "stop.fill" : "antenna.radiowaves.left.and.right")
-                        Text(isScanning ? "Stop Scanning" : "Scan for Devices")
+                    
+                    Button(action: onManualSelect) {
+                        Text("Select Manually")
+                            .font(.headline)
+                            .foregroundColor(.black)
+                            .frame(maxWidth: .infinity)
+                            .padding()
+                            .background(Color(hex: "E0B0FF").opacity(0.7))
+                            .cornerRadius(12)
                     }
-                    .font(.headline)
-                    .foregroundColor(.black)
-                    .frame(maxWidth: .infinity)
-                    .padding()
-                    .background(Color.cyan)
-                    .cornerRadius(15)
                 }
-                .padding(.horizontal, 40)
-                .padding(.bottom, 40)
             }
-        }
-        .navigationBarHidden(true)
-        .onAppear {
-            pulseAnimation = true
+            .padding(24)
+            .background(Color(hex: "2a2a3e"))
+            .cornerRadius(20)
+            .padding(.horizontal, 40)
         }
     }
 }
+
+struct BulletPoint: View {
+    let text: String
+    
+    var body: some View {
+        HStack(alignment: .top, spacing: 8) {
+            Text("•")
+                .foregroundColor(.gray)
+            Text(text)
+                .font(.subheadline)
+                .foregroundColor(.gray)
+        }
+    }
+}
+
+// MARK: - Device Row
 
 struct DeviceRow: View {
     let device: BluetoothDevice
@@ -133,37 +413,11 @@ struct DeviceRow: View {
     }
 }
 
-// Placeholder for BluetoothDevice
+// MARK: - BluetoothDevice Model
+
 struct BluetoothDevice: Identifiable {
     let identifier: String
     let name: String
     
     var id: String { identifier }
-}
-
-// Color extension for hex colors
-extension Color {
-    init(hex: String) {
-        let hex = hex.trimmingCharacters(in: CharacterSet.alphanumerics.inverted)
-        var int: UInt64 = 0
-        Scanner(string: hex).scanHexInt64(&int)
-        let a, r, g, b: UInt64
-        switch hex.count {
-        case 3: // RGB (12-bit)
-            (a, r, g, b) = (255, (int >> 8) * 17, (int >> 4 & 0xF) * 17, (int & 0xF) * 17)
-        case 6: // RGB (24-bit)
-            (a, r, g, b) = (255, int >> 16, int >> 8 & 0xFF, int & 0xFF)
-        case 8: // ARGB (32-bit)
-            (a, r, g, b) = (int >> 24, int >> 16 & 0xFF, int >> 8 & 0xFF, int & 0xFF)
-        default:
-            (a, r, g, b) = (1, 1, 1, 0)
-        }
-        self.init(
-            .sRGB,
-            red: Double(r) / 255,
-            green: Double(g) / 255,
-            blue: Double(b) / 255,
-            opacity: Double(a) / 255
-        )
-    }
 }
