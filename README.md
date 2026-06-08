@@ -7,7 +7,7 @@
 
 <p align="center">
   <b>BDK Audio - Cross-Platform Companion App for ESP32 Bluetooth Speakers</b><br>
-  <sub>Control DSP | LED Effects | OTA Updates | Real-time Audio Meters</sub>
+  <sub>Control DSP | LED Effects | Bluetooth Codecs | OTA Updates | Real-time Audio Meters</sub>
 </p>
 
 <p align="center">
@@ -42,15 +42,33 @@ BDK Audio is a cross-platform companion application built with Kotlin Multiplatf
 ## Screenshots
 
 <p align="center">
-  <img src="screenshots/1000025257.jpg" width="280" alt="Main Controls"/>
+  <img src="screenshots/main_controls.jpg" width="280" alt="Main Controls"/>
   &nbsp;&nbsp;&nbsp;&nbsp;
-  <img src="screenshots/1000025259.jpg" width="280" alt="Settings & OTA"/>
+  <img src="screenshots/settings.jpg" width="280" alt="Settings"/>
 </p>
 
 <p align="center">
-  <img src="screenshots/1000025255.jpg" width="280" alt="App Info"/>
+  <img src="screenshots/codec_settings.jpg" width="280" alt="Bluetooth Codec Settings"/>
   &nbsp;&nbsp;&nbsp;&nbsp;
-  <img src="screenshots/1000025253.jpg" width="280" alt="Device Info"/>
+  <img src="screenshots/device_info.jpg" width="280" alt="Device Info"/>
+</p>
+
+<p align="center">
+  <img src="screenshots/connection_scanning.jpg" width="280" alt="Connection Scanning"/>
+  &nbsp;&nbsp;&nbsp;&nbsp;
+  <img src="screenshots/connection_manual.jpg" width="280" alt="Manual Connect"/>
+</p>
+
+<p align="center">
+  <img src="screenshots/main_codec_status.jpg" width="280" alt="Codec Status Badge"/>
+  &nbsp;&nbsp;&nbsp;&nbsp;
+  <img src="screenshots/led_effects.jpg" width="280" alt="LED Effects"/>
+</p>
+
+<p align="center">
+  <img src="screenshots/ota_updates.jpg" width="280" alt="OTA Updates"/>
+  &nbsp;&nbsp;&nbsp;&nbsp;
+  <img src="screenshots/app_info.jpg" width="280" alt="App Info"/>
 </p>
 
 ---
@@ -122,9 +140,17 @@ Audio-reactive visualization effects for 16x16 WS2812B LED matrix:
 | Color 2 | RGB | Secondary/gradient color |
 | Gradient Type | 0-2 | Color blend mode |
 
-### Bluetooth Codec Selection
+### Bluetooth Codec Settings
 
-Change the A2DP audio codec directly from the app:
+Dedicated full-screen codec configuration with live feedback:
+
+| Feature | Description |
+|:--------|:------------|
+| **Codec Selection** | SBC, AAC, aptX, aptX HD, LDAC |
+| **Sample Rate** | 44.1 kHz, 48 kHz, 88.2 kHz, 96 kHz, 176.4 kHz, 192 kHz |
+| **Bits Per Sample** | 16-bit, 24-bit, 32-bit |
+| **Live Status** | Current codec info updates in real time |
+| **Auto Permission** | Companion Device Manager association requested automatically on connect |
 
 | Codec | Max Bitrate | Best For |
 |:------|:-----------:|:---------|
@@ -133,6 +159,14 @@ Change the A2DP audio codec directly from the app:
 | aptX | 352 kbps | Low latency |
 | aptX HD | 576 kbps | High-definition audio |
 | LDAC | 990 kbps | Hi-Res listening |
+
+### Live Codec Monitoring
+
+| Feature | Description |
+|:--------|:------------|
+| Bottom Status Badge | Live codec name, sample rate & bit depth on main screen |
+| Device Info Sheet | Real-time codec updates without reopening |
+| System Polling | 2.5s polling for devices without `CODEC_CONFIG_CHANGED` broadcast |
 
 ### Over-the-Air Updates
 
@@ -161,10 +195,14 @@ shared/               # Cross-platform code (Kotlin)
 └── iosMain/          # iOS-specific implementations
 
 app/                  # Android app (Kotlin)
-├── MainActivityRedesign.kt    # Main control UI
+├── MainActivityRedesign.kt    # Main control UI + live codec badge
+├── SettingsActivity.kt        # DSP toggles, navigation hub
+├── CodecSettingsActivity.kt   # Full-screen codec config (codec / sample rate / bits)
+├── CodecManager.kt            # Reflection-based A2DP codec read/write
+├── DeviceInfoBottomSheet.kt   # Live-updating device & codec info sheet
+├── ConnectionActivity.kt      # BLE scan & auto-connect
 ├── OtaActivity.kt             # OTA update screen
-├── OtaDownloader.kt           # Google Drive integration
-└── SettingsActivity.kt        # DSP toggles, codec selection
+└── OtaDownloader.kt           # Google Drive integration
 
 iosApp/               # iOS app (SwiftUI)
 ├── MainControlView.swift      # Main control UI
@@ -207,6 +245,8 @@ The app uses a unified binary protocol with 3 BLE characteristics:
 |:-----------|:--------|
 | `BLUETOOTH_SCAN` | Scan for BLE devices (Android 12+) |
 | `BLUETOOTH_CONNECT` | Connect to BLE devices (Android 12+) |
+| `BLUETOOTH_PRIVILEGED` | Read A2DP codec status (system-signed apps) |
+| `COMPANION_DEVICE_SETUP` | Companion Device Manager association |
 | `ACCESS_FINE_LOCATION` | Required for BLE scanning |
 | `BLUETOOTH` / `BLUETOOTH_ADMIN` | Legacy (Android 11 and below) |
 
@@ -317,6 +357,10 @@ BDK-AUDIO-APP/
 │   │   ├── java/com/example/myspeaker/
 │   │   │   ├── MainActivityRedesign.kt
 │   │   │   ├── SettingsActivity.kt
+│   │   │   ├── CodecSettingsActivity.kt
+│   │   │   ├── CodecManager.kt
+│   │   │   ├── DeviceInfoBottomSheet.kt
+│   │   │   ├── ConnectionActivity.kt
 │   │   │   ├── OtaActivity.kt
 │   │   │   ├── OtaDownloader.kt
 │   │   │   └── ...

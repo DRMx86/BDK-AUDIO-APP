@@ -1,6 +1,13 @@
 package com.example.myspeaker
 
+import android.annotation.SuppressLint
+import android.bluetooth.BluetoothA2dp
+import android.bluetooth.BluetoothManager
+import android.bluetooth.BluetoothProfile
+import android.content.Context
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -66,6 +73,71 @@ class DeviceInfoBottomSheet : BottomSheetDialogFragment() {
 
     // File picker launcher - initialized in onCreate
     private var pickSoundLauncher: ActivityResultLauncher<String>? = null
+
+    // Live codec polling (the CODEC_CONFIG_CHANGED broadcast isn't delivered on some OEMs,
+    // so we poll getCodecStatus via CodecManager while the sheet is visible).
+    private var a2dpProxy: BluetoothA2dp? = null
+    private val pollHandler = Handler(Looper.getMainLooper())
+    private val pollRunnable = object : Runnable {
+        override fun run() {
+            pollCodecLive()
+            pollHandler.postDelayed(this, 2500)
+        }
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun acquireA2dpProxy() {
+        if (a2dpProxy != null) return
+        val ctx = context ?: return
+        try {
+            val mgr = ctx.getSystemService(Context.BLUETOOTH_SERVICE) as? BluetoothManager
+            mgr?.adapter?.getProfileProxy(ctx, object : BluetoothProfile.ServiceListener {
+                override fun onServiceConnected(profile: Int, proxy: BluetoothProfile?) {
+                    if (profile == BluetoothProfile.A2DP) a2dpProxy = proxy as? BluetoothA2dp
+                }
+                override fun onServiceDisconnected(profile: Int) {
+                    if (profile == BluetoothProfile.A2DP) a2dpProxy = null
+                }
+            }, BluetoothProfile.A2DP)
+        } catch (e: Exception) {
+            android.util.Log.w(TAG, "acquireA2dpProxy failed: ${e.message}")
+        }
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun releaseA2dpProxy() {
+        val proxy = a2dpProxy ?: return
+        try {
+            val mgr = context?.getSystemService(Context.BLUETOOTH_SERVICE) as? BluetoothManager
+            mgr?.adapter?.closeProfileProxy(BluetoothProfile.A2DP, proxy)
+        } catch (_: Exception) {
+        }
+        a2dpProxy = null
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun pollCodecLive() {
+        val proxy = a2dpProxy ?: return
+        val device = try {
+            proxy.connectedDevices?.firstOrNull()
+        } catch (e: SecurityException) {
+            null
+        } ?: return
+        val info = CodecManager.getCurrentAudioInfo(proxy, device) ?: return
+        val args = arguments
+        val name = args?.getString("device_name", "Unknown") ?: "Unknown"
+        val fw = args?.getString("fw_version", "Unknown") ?: "Unknown"
+        updateInfo(
+            isConnected = true,
+            deviceName = name,
+            fwVersion = fw,
+            codecName = info.codecName,
+            sampleRate = info.sampleRateLabel,
+            bitsPerSample = info.bitsPerSampleLabel,
+            channelMode = info.channelModeLabel,
+            playbackQuality = CodecManager.playbackQuality(info.codecType, info.sampleRateLabel)
+        )
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -172,10 +244,18 @@ class DeviceInfoBottomSheet : BottomSheetDialogFragment() {
         soundStatus?.let { status ->
             updateSoundStatus(status)
         }
+
+        // Start live codec polling.
+        acquireA2dpProxy()
+        pollHandler.removeCallbacks(pollRunnable)
+        pollHandler.postDelayed(pollRunnable, 600)
     }
     
     override fun onPause() {
         super.onPause()
+        // Stop live codec polling.
+        pollHandler.removeCallbacks(pollRunnable)
+        releaseA2dpProxy()
         // Unregister when not visible
         if (currentInstance == this) {
             currentInstance = null

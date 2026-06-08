@@ -102,41 +102,6 @@
             android:layout_marginTop="24dp"
             android:indeterminateTint="@color/bdk_accent_primary" />
 
-        <!-- Device List (shown when multiple devices found) -->
-        <androidx.cardview.widget.CardView
-            android:id="@+id/cardDeviceList"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="24dp"
-            android:visibility="gone"
-            app:cardBackgroundColor="@color/bdk_background_card"
-            app:cardCornerRadius="20dp"
-            app:cardElevation="8dp">
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="vertical"
-                android:padding="20dp">
-
-                <TextView
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:text="AVAILABLE DEVICES"
-                    android:textSize="12sp"
-                    android:textStyle="bold"
-                    android:textColor="@color/bdk_text_tertiary"
-                    android:letterSpacing="0.1"
-                    android:paddingBottom="12dp" />
-
-                <androidx.recyclerview.widget.RecyclerView
-                    android:id="@+id/rvDevices"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:nestedScrollingEnabled="false" />
-            </LinearLayout>
-        </androidx.cardview.widget.CardView>
-
         <!-- Retry Button (shown on timeout) -->
         <Button
             android:id="@+id/btnRetry"

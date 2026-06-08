@@ -12,7 +12,9 @@ class SettingsActivity : AppCompatActivity() {
         // Callback for immediate control updates
         var onControlChanged: ((bassBoost: Boolean, bypassDsp: Boolean, channelFlip: Boolean) -> Unit)? = null
         // Callback for codec selection - returns selected codec type (0-4)
-        var onCodecSelected: ((codecType: Int) -> Unit)? = null
+        var onCodecSelected: ((codecType: Int) -> Boolean)? = null
+        // Callback for immediate device rename
+        var onNameChanged: ((name: String) -> Boolean)? = null
         // Callback for sound mute control
         var onSoundMuteChanged: ((muted: Boolean) -> Unit)? = null
         // Callback for sound delete
@@ -25,7 +27,8 @@ class SettingsActivity : AppCompatActivity() {
             Pair("AAC", 1),
             Pair("aptX", 2),
             Pair("aptX HD", 3),
-            Pair("LDAC", 4)
+            Pair("LDAC", 4),
+            Pair("Opus", 6)
         )
         
         // Device info data for showing bottom sheet in Settings
@@ -95,12 +98,22 @@ class SettingsActivity : AppCompatActivity() {
         findViewById<Button>(R.id.btnApplyName)?.setOnClickListener {
             val newName = etDeviceName?.text?.toString()?.trim() ?: return@setOnClickListener
             if (newName.isNotEmpty()) {
+                val applied = onNameChanged?.invoke(newName) ?: false
+                if (applied) {
+                    getSharedPreferences("BDKAudioPrefs", MODE_PRIVATE)
+                        .edit()
+                        .putString("device_name", newName)
+                        .apply()
+                    Toast.makeText(this, "Name applied", Toast.LENGTH_SHORT).show()
+                } else {
+                    Toast.makeText(this, "Connect to the speaker first", Toast.LENGTH_SHORT).show()
+                }
+
                 // Send to MainActivity to apply via BLE
                 val resultIntent = Intent()
                 resultIntent.putExtra("action", "rename_device")
                 resultIntent.putExtra("new_name", newName)
                 setResult(RESULT_OK, resultIntent)
-                Toast.makeText(this, "Name will be applied", Toast.LENGTH_SHORT).show()
             }
         }
 
@@ -111,7 +124,9 @@ class SettingsActivity : AppCompatActivity() {
 
         // Bluetooth Codec - show picker dialog, stay in settings
         findViewById<LinearLayout>(R.id.btnBluetoothCodec)?.setOnClickListener {
-            showCodecPicker()
+            val codecIntent = Intent(this, CodecSettingsActivity::class.java)
+            codecIntent.putExtra("device_address", intent.getStringExtra("device_address"))
+            startActivity(codecIntent)
         }
 
         // Bass Boost toggle
@@ -219,17 +234,15 @@ class SettingsActivity : AppCompatActivity() {
             .setSingleChoiceItems(codecNames, currentIndex) { dialog, which ->
                 val selectedCodec = codecs[which]
                 
-                // Call callback to have MainActivity handle the A2DP codec change
-                onCodecSelected?.invoke(selectedCodec.second)
-                
-                // Update UI immediately (MainActivity will also update via A2DP)
-                tvCurrentCodec?.text = selectedCodec.first
-                
-                // Save preference
-                val prefs = getSharedPreferences("BDKAudioPrefs", MODE_PRIVATE)
-                prefs.edit().putString("current_codec", selectedCodec.first).apply()
-                
-                Toast.makeText(this, "Codec: ${selectedCodec.first}", Toast.LENGTH_SHORT).show()
+                val changed = onCodecSelected?.invoke(selectedCodec.second) ?: false
+                if (changed) {
+                    tvCurrentCodec?.text = selectedCodec.first
+                    val prefs = getSharedPreferences("BDKAudioPrefs", MODE_PRIVATE)
+                    prefs.edit().putString("current_codec", selectedCodec.first).apply()
+                    Toast.makeText(this, "Codec: ${selectedCodec.first}", Toast.LENGTH_SHORT).show()
+                } else {
+                    Toast.makeText(this, "Codec change was blocked by Android", Toast.LENGTH_SHORT).show()
+                }
                 dialog.dismiss()
             }
             .setNegativeButton("Cancel", null)

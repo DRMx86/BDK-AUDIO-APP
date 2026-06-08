@@ -18,6 +18,7 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.os.ParcelUuid
+import android.provider.Settings
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -56,8 +57,6 @@ class ConnectionActivity : AppCompatActivity() {
     private lateinit var tvConnectionStatus: TextView
     private lateinit var tvStatusDetail: TextView
     private lateinit var progressScanning: ProgressBar
-    private lateinit var cardDeviceList: View
-    private lateinit var rvDevices: RecyclerView
     private lateinit var btnRetry: Button
     private lateinit var tvManualConnect: TextView
     private lateinit var overlayTimeout: View
@@ -77,9 +76,27 @@ class ConnectionActivity : AppCompatActivity() {
     private var deviceAdapter: ConnectionDeviceAdapter? = null
     private lateinit var prefs: SharedPreferences
     private var pulseAnimatorSet: AnimatorSet? = null
+    private var bluetoothA2dp: BluetoothA2dp? = null
 
     // Service UUID for BDK devices
-    private val serviceUuidControl = ParcelUuid.fromString("12345678-1234-1234-1234-1234567890ad")
+    private val serviceUuidControl = ParcelUuid.fromString("12345678-1234-1234-1234-123456789000")
+
+    @SuppressLint("MissingPermission")
+    private val a2dpProfileListener = object : BluetoothProfile.ServiceListener {
+        override fun onServiceConnected(profile: Int, proxy: BluetoothProfile?) {
+            if (profile == BluetoothProfile.A2DP) {
+                bluetoothA2dp = proxy as? BluetoothA2dp
+                checkA2dpGateAndScan()
+            }
+        }
+
+        override fun onServiceDisconnected(profile: Int) {
+            if (profile == BluetoothProfile.A2DP) {
+                bluetoothA2dp = null
+                showA2dpRequiredState()
+            }
+        }
+    }
 
     // Permission request
     private val permissionLauncher = registerForActivityResult(
@@ -87,7 +104,8 @@ class ConnectionActivity : AppCompatActivity() {
     ) { permissions ->
         val allGranted = permissions.all { it.value }
         if (allGranted) {
-            startScanning()
+            requestA2dpProxy()
+            checkA2dpGateAndScan()
         } else {
             showTimeoutOverlay()
         }
@@ -101,16 +119,25 @@ class ConnectionActivity : AppCompatActivity() {
         
         initViews()
         setupListeners()
-        setupDeviceList()
         
         // Start pulse animation
         startPulseAnimation()
         
-        // Check permissions and start scanning
+        requestA2dpProxy()
+
+        // Check permissions and start scanning only after A2DP is connected
         if (hasBluetoothPermissions()) {
-            startScanning()
+            checkA2dpGateAndScan()
         } else {
             requestBluetoothPermissions()
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (hasBluetoothPermissions()) {
+            requestA2dpProxy()
+            checkA2dpGateAndScan()
         }
     }
 
@@ -122,8 +149,6 @@ class ConnectionActivity : AppCompatActivity() {
         tvConnectionStatus = findViewById(R.id.tvConnectionStatus)
         tvStatusDetail = findViewById(R.id.tvStatusDetail)
         progressScanning = findViewById(R.id.progressScanning)
-        cardDeviceList = findViewById(R.id.cardDeviceList)
-        rvDevices = findViewById(R.id.rvDevices)
         btnRetry = findViewById(R.id.btnRetry)
         tvManualConnect = findViewById(R.id.tvManualConnect)
         overlayTimeout = findViewById(R.id.overlayTimeout)
@@ -132,24 +157,16 @@ class ConnectionActivity : AppCompatActivity() {
     }
 
     private fun setupListeners() {
-        btnRetry.setOnClickListener { restartScanning() }
-        tvManualConnect.setOnClickListener { showAllDevices() }
+        btnRetry.setOnClickListener { checkA2dpGateAndScan() }
+        tvManualConnect.setOnClickListener { openBluetoothSettings() }
         btnOverlayRetry.setOnClickListener { 
             hideTimeoutOverlay()
-            restartScanning()
+            checkA2dpGateAndScan()
         }
         btnOverlayManual.setOnClickListener {
             hideTimeoutOverlay()
-            showAllDevices()
+            openBluetoothSettings()
         }
-    }
-
-    private fun setupDeviceList() {
-        deviceAdapter = ConnectionDeviceAdapter { device ->
-            connectToDevice(device)
-        }
-        rvDevices.layoutManager = LinearLayoutManager(this)
-        rvDevices.adapter = deviceAdapter
     }
 
     private fun startPulseAnimation() {
@@ -235,15 +252,40 @@ class ConnectionActivity : AppCompatActivity() {
     }
 
     @SuppressLint("MissingPermission")
+    private fun requestA2dpProxy() {
+        if (!hasBluetoothPermissions() || bluetoothA2dp != null) return
+        bluetoothAdapter?.getProfileProxy(this, a2dpProfileListener, BluetoothProfile.A2DP)
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun checkA2dpGateAndScan() {
+        if (!hasBluetoothPermissions()) return
+        if (bluetoothA2dp == null) {
+            showA2dpRequiredState()
+            return
+        }
+
+        if (!isScanning && foundDevices.isEmpty()) {
+            startScanning()
+        }
+    }
+
+    private fun showA2dpRequiredState() {
+        updateStatus("Connect A2DP first", "Connect BDK SPEAKER in Bluetooth settings, then return")
+        progressScanning.visibility = View.GONE
+        btnRetry.visibility = View.VISIBLE
+        tvManualConnect.visibility = View.VISIBLE
+    }
+
+    @SuppressLint("MissingPermission")
     private fun startScanning() {
+        if (bluetoothA2dp == null) return
         if (isScanning) return
         
         foundDevices.clear()
-        deviceAdapter?.updateDevices(emptyList())
         
-        updateStatus("Searching for devices...", "Make sure your speaker is powered on")
+        updateStatus("Searching for BDK speaker...", "A2DP must already be connected")
         progressScanning.visibility = View.VISIBLE
-        cardDeviceList.visibility = View.GONE
         btnRetry.visibility = View.GONE
         tvManualConnect.visibility = View.GONE
 
@@ -288,14 +330,8 @@ class ConnectionActivity : AppCompatActivity() {
     @SuppressLint("MissingPermission")
     private val scanCallback = object : ScanCallback() {
         override fun onScanResult(callbackType: Int, result: ScanResult) {
-            val deviceName = result.device.name ?: return
-            
-            // Only show BDK devices (filter by name prefix or service UUID)
-            if (!deviceName.startsWith("BDK") && !deviceName.contains("Speaker", ignoreCase = true)) {
-                // Check if it has our service UUID
-                val hasService = result.scanRecord?.serviceUuids?.contains(serviceUuidControl) == true
-                if (!hasService) return
-            }
+            if (!hasBdkService(result)) return
+            if (!hasMatchingA2dpConnection(result.device.address)) return
 
             // Check if already in list
             val existing = foundDevices.find { it.device.address == result.device.address }
@@ -312,6 +348,16 @@ class ConnectionActivity : AppCompatActivity() {
                 btnRetry.visibility = View.VISIBLE
             }
         }
+    }
+
+    private fun hasBdkService(result: ScanResult): Boolean {
+        return result.scanRecord?.serviceUuids?.contains(serviceUuidControl) == true
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun hasMatchingA2dpConnection(bleAddress: String): Boolean {
+        val connected = bluetoothA2dp?.connectedDevices ?: return false
+        return connected.any { it.address.equals(bleAddress, ignoreCase = true) }
     }
 
     // Auto-connect runnable for single device
@@ -359,18 +405,16 @@ class ConnectionActivity : AppCompatActivity() {
     }
 
     private fun showDeviceList() {
-        cardDeviceList.visibility = View.VISIBLE
+        // Available Devices list removed: rely on auto-connect + manual connect.
         tvManualConnect.visibility = View.VISIBLE
-        deviceAdapter?.updateDevices(foundDevices)
     }
 
     private fun showAllDevices() {
-        // Show all found devices for manual selection
-        if (foundDevices.isNotEmpty()) {
-            showDeviceList()
-        } else {
-            restartScanning()
-        }
+        openBluetoothSettings()
+    }
+
+    private fun openBluetoothSettings() {
+        startActivity(Intent(Settings.ACTION_BLUETOOTH_SETTINGS))
     }
 
     @SuppressLint("MissingPermission")
@@ -383,10 +427,9 @@ class ConnectionActivity : AppCompatActivity() {
         stopScanning()
         stopPulseAnimation()
         
-        val deviceName = result.device.name ?: "BDK Speaker"
+        val deviceName = result.device.name ?: prefs.getString(KEY_SAVED_DEVICE_NAME, null) ?: "BDK Speaker"
         updateStatus("Connecting to $deviceName...", "Please wait")
         progressScanning.visibility = View.VISIBLE
-        cardDeviceList.visibility = View.GONE
 
         // Save this device for next time
         prefs.edit()
@@ -436,6 +479,10 @@ class ConnectionActivity : AppCompatActivity() {
         stopScanning()
         stopPulseAnimation()
         handler.removeCallbacksAndMessages(null)
+        bluetoothA2dp?.let {
+            bluetoothAdapter?.closeProfileProxy(BluetoothProfile.A2DP, it)
+        }
+        bluetoothA2dp = null
     }
 
     /**

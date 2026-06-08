@@ -1,0 +1,186 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="@color/bdk_background_primary"
+    android:fitsSystemWindows="true">
+
+    <!-- Header -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:paddingHorizontal="16dp"
+        android:paddingTop="24dp"
+        android:paddingBottom="12dp">
+
+        <ImageButton
+            android:id="@+id/btnBack"
+            android:layout_width="44dp"
+            android:layout_height="44dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:src="@drawable/ic_arrow_back"
+            android:contentDescription="Back"
+            app:tint="@color/bdk_text_primary" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Bluetooth Codec"
+            android:textSize="20sp"
+            android:textStyle="bold"
+            android:textColor="@color/bdk_text_primary"
+            android:layout_marginStart="12dp" />
+    </LinearLayout>
+
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:fillViewport="true"
+        android:clipToPadding="false">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="20dp">
+
+            <!-- Current audio info card -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:background="@drawable/bdk_card_glass"
+                android:padding="18dp">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="NOW PLAYING"
+                    android:textSize="11sp"
+                    android:letterSpacing="0.15"
+                    android:textColor="@color/bdk_text_tertiary"
+                    android:layout_marginBottom="10dp" />
+
+                <TextView
+                    android:id="@+id/tvCurrentCodecBig"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Unknown"
+                    android:textSize="26sp"
+                    android:textStyle="bold"
+                    android:textColor="@color/bdk_accent_primary" />
+
+                <TextView
+                    android:id="@+id/tvCurrentDetails"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Sample rate and bit depth will appear here"
+                    android:textSize="13sp"
+                    android:textColor="@color/bdk_text_secondary"
+                    android:layout_marginTop="4dp" />
+
+                <TextView
+                    android:id="@+id/tvDeviceLine"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text=""
+                    android:textSize="12sp"
+                    android:textColor="@color/bdk_text_tertiary"
+                    android:layout_marginTop="6dp" />
+            </LinearLayout>
+
+            <!-- Status / warning line -->
+            <TextView
+                android:id="@+id/tvStatusMessage"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text=""
+                android:textSize="13sp"
+                android:textColor="@color/bdk_warning"
+                android:layout_marginTop="12dp"
+                android:visibility="gone" />
+
+            <!-- Codec selection -->
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="CODEC"
+                android:textSize="11sp"
+                android:letterSpacing="0.15"
+                android:textColor="@color/bdk_text_tertiary"
+                android:layout_marginTop="24dp"
+                android:layout_marginBottom="12dp" />
+
+            <LinearLayout
+                android:id="@+id/codecContainer"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical" />
+
+            <!-- Sample rate selection -->
+            <TextView
+                android:id="@+id/lblSampleRate"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="SAMPLE RATE"
+                android:textSize="11sp"
+                android:letterSpacing="0.15"
+                android:textColor="@color/bdk_text_tertiary"
+                android:layout_marginTop="24dp"
+                android:layout_marginBottom="12dp" />
+
+            <LinearLayout
+                android:id="@+id/sampleRateContainer"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical" />
+
+            <!-- Bits per sample selection -->
+            <TextView
+                android:id="@+id/lblBits"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="BITS PER SAMPLE"
+                android:textSize="11sp"
+                android:letterSpacing="0.15"
+                android:textColor="@color/bdk_text_tertiary"
+                android:layout_marginTop="24dp"
+                android:layout_marginBottom="12dp" />
+
+            <LinearLayout
+                android:id="@+id/bitsContainer"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical" />
+
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="24dp" />
+        </LinearLayout>
+    </ScrollView>
+
+    <!-- Apply button -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="16dp"
+        android:background="@color/bdk_background_primary">
+
+        <Button
+            android:id="@+id/btnApplyCodec"
+            android:layout_width="match_parent"
+            android:layout_height="52dp"
+            android:background="@drawable/bdk_btn_primary"
+            android:text="Apply Codec"
+            android:textColor="@color/bdk_text_on_accent"
+            android:textAllCaps="false"
+            android:textSize="15sp"
+            android:textStyle="bold" />
+    </LinearLayout>
+</LinearLayout>

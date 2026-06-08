@@ -6,8 +6,10 @@ import android.companion.AssociationInfo
 import android.companion.AssociationRequest
 import android.companion.BluetoothDeviceFilter
 import android.companion.CompanionDeviceManager
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.IntentSender
 import android.content.SharedPreferences
 import android.graphics.Color
@@ -23,7 +25,6 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import java.util.*
-import java.util.regex.Pattern
 
 /**
  * BDK Audio - Main Control Activity (Redesigned)
@@ -157,11 +158,21 @@ class MainActivityRedesign : AppCompatActivity() {
     // A2DP for codec control
     private var bluetoothA2dp: BluetoothA2dp? = null
     private var a2dpDevice: BluetoothDevice? = null
+    private var expectedDeviceAddress: String? = null
     
     // Companion Device Manager for codec access on Android 12+
     private var companionDeviceManager: CompanionDeviceManager? = null
     private var hasCdmAssociation = false
     private var cdmAssociationRequested = false
+    private var cdmAutoTriggered = false
+
+    // Live codec polling (CODEC_CONFIG_CHANGED broadcast isn't delivered on some OEMs).
+    private val codecPollRunnable = object : Runnable {
+        override fun run() {
+            if (isConnected) updateCodecFromSystem()
+            handler.postDelayed(this, 2500)
+        }
+    }
     
     // CDM association result launcher
     private val cdmAssociationLauncher = registerForActivityResult(
@@ -176,6 +187,26 @@ class MainActivityRedesign : AppCompatActivity() {
         } else {
             android.util.Log.w("CDM", "Device association denied")
             cdmAssociationRequested = false
+        }
+    }
+
+    private val codecConfigReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (intent?.action != "android.bluetooth.a2dp.profile.action.CODEC_CONFIG_CHANGED") return
+            val status = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                intent.getParcelableExtra(BluetoothCodecStatus.EXTRA_CODEC_STATUS, BluetoothCodecStatus::class.java)
+            } else {
+                @Suppress("DEPRECATION")
+                intent.getParcelableExtra(BluetoothCodecStatus.EXTRA_CODEC_STATUS)
+            }
+            CodecManager.parseStatusObject(status)
+            val config = status?.codecConfig
+            if (config != null) {
+                android.util.Log.d("Codec", "CODEC_CONFIG_CHANGED broadcast: $config")
+                applyCodecConfig(config)
+            } else {
+                android.util.Log.w("Codec", "CODEC_CONFIG_CHANGED without codec config")
+            }
         }
     }
 
@@ -234,6 +265,7 @@ class MainActivityRedesign : AppCompatActivity() {
     @Volatile private var soundWriteComplete: Boolean = false
     private val soundWriteLock = Object()
     @Volatile private var soundUploadAck: ByteArray? = null
+    @Volatile private var isSoundUploadInProgress: Boolean = false
     private val soundUploadLock = Object()
     
     // BLE command queue to prevent write collisions
@@ -253,10 +285,9 @@ class MainActivityRedesign : AppCompatActivity() {
         override fun onServiceConnected(profile: Int, proxy: BluetoothProfile?) {
             if (profile == BluetoothProfile.A2DP) {
                 bluetoothA2dp = proxy as? BluetoothA2dp
-                // Get connected A2DP device
-                bluetoothA2dp?.connectedDevices?.firstOrNull()?.let { device ->
+                resolveA2dpDevice()?.let { device ->
                     a2dpDevice = device
-                    updateCodecFromSystem()
+                    ensureCdmAssociation()
                 }
             }
         }
@@ -294,6 +325,7 @@ class MainActivityRedesign : AppCompatActivity() {
         currentDeviceNameStr = prefs.getString("device_name", "BDK SPEAKER") ?: "BDK SPEAKER"
         
         initViews()
+        registerCodecReceiver()
         setupListeners()
         setupEqPresets()
         setupLedEffects()
@@ -314,6 +346,16 @@ class MainActivityRedesign : AppCompatActivity() {
         
         // Handle auto-connect from ConnectionActivity
         handleAutoConnect()
+    }
+
+    private fun registerCodecReceiver() {
+        val filter = IntentFilter("android.bluetooth.a2dp.profile.action.CODEC_CONFIG_CHANGED")
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(codecConfigReceiver, filter, Context.RECEIVER_EXPORTED)
+        } else {
+            @Suppress("DEPRECATION")
+            registerReceiver(codecConfigReceiver, filter)
+        }
     }
 
     private fun initViews() {
@@ -398,6 +440,7 @@ class MainActivityRedesign : AppCompatActivity() {
             intent.putExtra("device_name", currentDeviceNameStr)
             intent.putExtra("current_codec", currentCodecName)
             intent.putExtra("firmware_version", currentFirmwareVersion)
+            intent.putExtra("device_address", expectedDeviceAddress ?: getIntent().getStringExtra("device_address"))
             
             // Register callback for immediate control updates
             SettingsActivity.onControlChanged = { bass, bypass, flip ->
@@ -406,22 +449,27 @@ class MainActivityRedesign : AppCompatActivity() {
                 channelFlipEnabled = flip
                 sendControlByte()
             }
+
+            SettingsActivity.onNameChanged = { newName ->
+                if (isConnected && cmdChar != null && bluetoothGatt != null) {
+                    tvDeviceName.text = newName
+                    currentDeviceNameStr = newName
+                    prefs.edit().putString("device_name", newName).apply()
+                    sendDeviceName(newName)
+                    true
+                } else {
+                    false
+                }
+            }
             
             // Register callback for codec selection
             SettingsActivity.onCodecSelected = { codecType ->
                 val a2dp = bluetoothA2dp
-                val device = a2dpDevice
+                val device = resolveA2dpDevice()
                 if (a2dp != null && device != null) {
                     try {
                         setCodecPreference(a2dp, device, codecType)
-                        currentCodecName = when (codecType) {
-                            0 -> "SBC"
-                            1 -> "AAC"
-                            2 -> "aptX"
-                            3 -> "aptX HD"
-                            4 -> "LDAC"
-                            else -> "Unknown"
-                        }
+                        currentCodecName = codecNameForType(codecType)
                         prefs.edit().putString("current_codec", currentCodecName).apply()
                         runOnUiThread {
                             tvCodecBadge.text = currentCodecName
@@ -430,9 +478,25 @@ class MainActivityRedesign : AppCompatActivity() {
                         android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
                             updateCodecFromSystem()
                         }, 1000)
+                        true
                     } catch (e: Exception) {
                         android.util.Log.e("Codec", "Failed to set codec", e)
+                        val needsAssociation = e.findCause<SecurityException>()?.message?.contains("Companion Device", ignoreCase = true) == true ||
+                            e.findCause<SecurityException>()?.message?.contains("CDM", ignoreCase = true) == true
+                        if (needsAssociation) {
+                            requestCdmAssociation(device)
+                        }
+                        runOnUiThread {
+                            Toast.makeText(
+                                this,
+                                "Android blocked codec switching for this device",
+                                Toast.LENGTH_SHORT
+                            ).show()
+                        }
+                        false
                     }
+                } else {
+                    false
                 }
             }
             
@@ -1157,6 +1221,7 @@ class MainActivityRedesign : AppCompatActivity() {
         val autoConnect = intent.getBooleanExtra("auto_connect", false)
         val deviceAddress = intent.getStringExtra("device_address")
         val deviceName = intent.getStringExtra("device_name")
+        expectedDeviceAddress = deviceAddress
 
         if (autoConnect && deviceAddress != null) {
             tvDeviceName.text = deviceName ?: "BDK SPEAKER"
@@ -1255,7 +1320,8 @@ class MainActivityRedesign : AppCompatActivity() {
                     runOnUiThread {
                         if (cmdChar != null && statusChar != null) {
                             Toast.makeText(this@MainActivityRedesign, "Connected (Unified)", Toast.LENGTH_SHORT).show()
-                            updateCodecFromSystem()
+                            // BLE is up: make sure we have codec read permission (CDM) for this device.
+                            ensureCdmAssociation()
                         } else {
                             Toast.makeText(this@MainActivityRedesign, "Error: Unified characteristics not found", Toast.LENGTH_LONG).show()
                         }
@@ -1637,22 +1703,25 @@ class MainActivityRedesign : AppCompatActivity() {
         // Set the ack so upload thread knows it's complete
         synchronized(soundUploadLock) {
             soundUploadAck = byteArrayOf(BleUnifiedProtocol.Resp.SOUND_COMPLETE)
+            isSoundUploadInProgress = false
             (soundUploadLock as Object).notifyAll()
-        }
-        runOnUiThread {
-            Toast.makeText(this, "Sound upload complete!", Toast.LENGTH_SHORT).show()
         }
     }
     
     private fun handleSoundUploadFailed(errorCode: Int) {
         android.util.Log.e("Sound", "Upload failed with error: $errorCode")
-        // Set the ack so upload thread knows it failed
+        if (!isSoundUploadInProgress) {
+            android.util.Log.w("Sound", "Ignoring stale SOUND_FAILED outside an active upload")
+            return
+        }
+
+        // Set the ack so upload thread knows it failed. The upload caller owns
+        // the user-facing toast so stale/intermediate BLE packets cannot show a
+        // false failure and then a later success.
         synchronized(soundUploadLock) {
             soundUploadAck = byteArrayOf(BleUnifiedProtocol.Resp.SOUND_FAILED, errorCode.toByte())
+            isSoundUploadInProgress = false
             (soundUploadLock as Object).notifyAll()
-        }
-        runOnUiThread {
-            Toast.makeText(this, "Sound upload failed: $errorCode", Toast.LENGTH_LONG).show()
         }
     }
     
@@ -1932,13 +2001,13 @@ class MainActivityRedesign : AppCompatActivity() {
     @SuppressLint("MissingPermission")
     private fun updateCodecFromSystem() {
         val a2dp = bluetoothA2dp ?: return
-        val device = a2dpDevice ?: return
-        
-        // On Android 12+, check if we need CDM association first
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && !hasCdmAssociation && !cdmAssociationRequested) {
-            // Try to request CDM association for codec access
-            requestCdmAssociation(device)
+        val device = resolveA2dpDevice() ?: return
+        CodecManager.getCurrentAudioInfo(bluetoothA2dp, device)?.let { info ->
+            a2dpDevice = device
+            applyAudioInfo(info)
+            return
         }
+        a2dpDevice = device
         
         try {
             val getCodecStatusMethod = a2dp.javaClass.getMethod("getCodecStatus", BluetoothDevice::class.java)
@@ -1954,107 +2023,236 @@ class MainActivityRedesign : AppCompatActivity() {
             val codecConfig = getCodecConfigMethod.invoke(codecStatus)
             
                 if (codecConfig != null) {
-                    // Get codec type
-                    val getCodecTypeMethod = codecConfig.javaClass.getMethod("getCodecType")
-                    val codecType = getCodecTypeMethod.invoke(codecConfig) as Int
-                    
-                    currentCodecName = when (codecType) {
-                        0 -> "SBC"
-                        1 -> "AAC"
-                        2 -> "aptX"
-                        3 -> "aptX HD"
-                        4 -> "LDAC"
-                        else -> "Unknown"
-                    }
-                    
-                    // Get sample rate
-                    try {
-                        val getSampleRateMethod = codecConfig.javaClass.getMethod("getSampleRate")
-                        val sampleRate = getSampleRateMethod.invoke(codecConfig) as Int
-                        currentSampleRate = when (sampleRate) {
-                            0x01 -> "44.1 kHz"
-                            0x02 -> "48 kHz"
-                            0x04 -> "88.2 kHz"
-                            0x08 -> "96 kHz"
-                            0x10 -> "176.4 kHz"
-                            0x20 -> "192 kHz"
-                            else -> "$sampleRate Hz"
-                        }
-                    } catch (e: Exception) {
-                        currentSampleRate = "Unknown"
-                    }
-                    
-                    // Get bits per sample
-                    try {
-                        val getBitsPerSampleMethod = codecConfig.javaClass.getMethod("getBitsPerSample")
-                        val bitsPerSample = getBitsPerSampleMethod.invoke(codecConfig) as Int
-                        currentBitsPerSample = when (bitsPerSample) {
-                            0x01 -> "16 bit"
-                            0x02 -> "24 bit"
-                            0x04 -> "32 bit"
-                            else -> "$bitsPerSample bit"
-                        }
-                    } catch (e: Exception) {
-                        currentBitsPerSample = "Unknown"
-                    }
-                    
-                    // Get channel mode
-                    try {
-                        val getChannelModeMethod = codecConfig.javaClass.getMethod("getChannelMode")
-                        val channelMode = getChannelModeMethod.invoke(codecConfig) as Int
-                        currentChannelMode = when (channelMode) {
-                            0x01 -> "Mono"
-                            0x02 -> "Stereo"
-                            else -> "Unknown"
-                        }
-                    } catch (e: Exception) {
-                        currentChannelMode = "Unknown"
-                    }
-                    
-                    // Determine playback quality based on codec and sample rate
-                    currentPlaybackQuality = when {
-                        codecType == 4 && currentSampleRate.contains("96") -> "Hi-Res"
-                        codecType == 4 -> "High"
-                        codecType == 3 -> "High"
-                        codecType == 2 -> "Standard"
-                        codecType == 1 -> "Standard"
-                        else -> "Standard"
-                    }
-                    
-                    prefs.edit().putString("current_codec", currentCodecName).apply()
-                    runOnUiThread {
-                        tvCodecBadge.text = currentCodecName
-                    }
-                    
-                    android.util.Log.d("Codec", "Audio info: $currentCodecName, $currentSampleRate, $currentBitsPerSample, $currentChannelMode, $currentPlaybackQuality")
+                    applyCodecConfig(codecConfig)
                 }
         } catch (e: java.lang.reflect.InvocationTargetException) {
-            // Android 12+ requires CDM association for getCodecStatus
             val cause = e.cause
-            if (cause is SecurityException && cause.message?.contains("CDM") == true) {
-                android.util.Log.d("Codec", "CDM association required - requesting association")
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && !cdmAssociationRequested) {
-                    a2dpDevice?.let { requestCdmAssociation(it) }
-                }
-            } else {
-                android.util.Log.w("Codec", "Failed to get codec status: ${cause?.message}")
-            }
+            android.util.Log.w("Codec", "Failed to get codec status: ${cause?.message}")
         } catch (e: SecurityException) {
-            // Direct SecurityException on some devices - request CDM association
-            android.util.Log.d("Codec", "Permission denied for codec status - requesting CDM association")
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && !cdmAssociationRequested) {
-                a2dpDevice?.let { requestCdmAssociation(it) }
-            }
+            android.util.Log.w("Codec", "Permission denied for codec status: ${e.message}")
         } catch (e: Exception) {
             android.util.Log.w("Codec", "Failed to get codec status: ${e.message}")
         }
     }
+
+    @SuppressLint("MissingPermission")
+    private fun resolveA2dpDevice(): BluetoothDevice? {
+        val connected = bluetoothA2dp?.connectedDevices ?: return null
+        val expected = expectedDeviceAddress ?: intent.getStringExtra("device_address")
+        val byAddress = expected?.let { address ->
+            connected.firstOrNull { it.address.equals(address, ignoreCase = true) }
+        }
+        return byAddress ?: a2dpDevice?.takeIf { cached ->
+            connected.any { it.address.equals(cached.address, ignoreCase = true) }
+        } ?: connected.singleOrNull() ?: connected.firstOrNull()
+    }
+
+    private fun applyAudioInfo(info: CodecManager.AudioInfo) {
+        currentCodecName = info.codecName
+        currentSampleRate = info.sampleRateLabel
+        currentBitsPerSample = info.bitsPerSampleLabel
+        currentChannelMode = info.channelModeLabel
+        currentPlaybackQuality = CodecManager.playbackQuality(info.codecType, info.sampleRateLabel)
+        prefs.edit().putString("current_codec", currentCodecName).apply()
+        SettingsActivity.deviceInfoData = SettingsActivity.deviceInfoData?.copy(
+            codecName = currentCodecName,
+            sampleRate = currentSampleRate,
+            bitsPerSample = currentBitsPerSample,
+            channelMode = currentChannelMode,
+            playbackQuality = currentPlaybackQuality
+        )
+        runOnUiThread { tvCodecBadge.text = currentCodecName }
+        android.util.Log.d("Codec", "AudioInfo: $currentCodecName, $currentSampleRate, $currentBitsPerSample, $currentChannelMode")
+    }
+
+    private fun applyCodecConfig(codecConfig: Any) {
+        val codecType = codecTypeFromConfig(codecConfig)
+        currentCodecName = codecNameFromConfig(codecConfig, codecType)
+
+        val sampleRate = readIntMethod(codecConfig, "getSampleRate")
+        currentSampleRate = when (sampleRate) {
+            BluetoothCodecConfig.SAMPLE_RATE_44100 -> "44.1 kHz"
+            BluetoothCodecConfig.SAMPLE_RATE_48000 -> "48 kHz"
+            BluetoothCodecConfig.SAMPLE_RATE_88200 -> "88.2 kHz"
+            BluetoothCodecConfig.SAMPLE_RATE_96000 -> "96 kHz"
+            BluetoothCodecConfig.SAMPLE_RATE_176400 -> "176.4 kHz"
+            BluetoothCodecConfig.SAMPLE_RATE_192000 -> "192 kHz"
+            else -> "Unknown"
+        }
+
+        val bitsPerSample = readIntMethod(codecConfig, "getBitsPerSample")
+        currentBitsPerSample = when (bitsPerSample) {
+            BluetoothCodecConfig.BITS_PER_SAMPLE_16 -> "16 bit"
+            BluetoothCodecConfig.BITS_PER_SAMPLE_24 -> "24 bit"
+            BluetoothCodecConfig.BITS_PER_SAMPLE_32 -> "32 bit"
+            else -> "Unknown"
+        }
+
+        val channelMode = readIntMethod(codecConfig, "getChannelMode")
+        currentChannelMode = when (channelMode) {
+            BluetoothCodecConfig.CHANNEL_MODE_MONO -> "Mono"
+            BluetoothCodecConfig.CHANNEL_MODE_STEREO -> "Stereo"
+            else -> "Unknown"
+        }
+
+        currentPlaybackQuality = when {
+            codecType == BluetoothCodecConfig.SOURCE_CODEC_TYPE_LDAC && currentSampleRate.contains("96") -> "Hi-Res"
+            codecType == BluetoothCodecConfig.SOURCE_CODEC_TYPE_LDAC -> "High"
+            codecType == BluetoothCodecConfig.SOURCE_CODEC_TYPE_APTX_HD -> "High"
+            codecType == BluetoothCodecConfig.SOURCE_CODEC_TYPE_OPUS -> "Standard"
+            codecType == BluetoothCodecConfig.SOURCE_CODEC_TYPE_APTX -> "Standard"
+            codecType == BluetoothCodecConfig.SOURCE_CODEC_TYPE_AAC -> "Standard"
+            else -> "Standard"
+        }
+
+        prefs.edit().putString("current_codec", currentCodecName).apply()
+        SettingsActivity.deviceInfoData = SettingsActivity.deviceInfoData?.copy(
+            codecName = currentCodecName,
+            sampleRate = currentSampleRate,
+            bitsPerSample = currentBitsPerSample,
+            channelMode = currentChannelMode,
+            playbackQuality = currentPlaybackQuality
+        )
+        runOnUiThread {
+            tvCodecBadge.text = currentCodecName
+        }
+
+        android.util.Log.d("Codec", "Audio info: $currentCodecName, $currentSampleRate, $currentBitsPerSample, $currentChannelMode, $currentPlaybackQuality")
+    }
+
+    private fun codecTypeFromConfig(codecConfig: Any): Int {
+        return try {
+            val getCodecTypeMethod = codecConfig.javaClass.getMethod("getCodecType")
+            getCodecTypeMethod.invoke(codecConfig) as Int
+        } catch (e: Exception) {
+            BluetoothCodecConfig.SOURCE_CODEC_TYPE_INVALID
+        }
+    }
+
+    private inline fun <reified T : Throwable> Throwable.findCause(): T? {
+        var current: Throwable? = this
+        while (current != null) {
+            if (current is T) return current
+            current = current.cause
+        }
+        return null
+    }
+
+    private fun codecNameForType(codecType: Int): String {
+        return when (codecType) {
+            BluetoothCodecConfig.SOURCE_CODEC_TYPE_SBC -> "SBC"
+            BluetoothCodecConfig.SOURCE_CODEC_TYPE_AAC -> "AAC"
+            BluetoothCodecConfig.SOURCE_CODEC_TYPE_APTX -> "aptX"
+            BluetoothCodecConfig.SOURCE_CODEC_TYPE_APTX_HD -> "aptX HD"
+            BluetoothCodecConfig.SOURCE_CODEC_TYPE_LDAC -> "LDAC"
+            BluetoothCodecConfig.SOURCE_CODEC_TYPE_OPUS -> "Opus"
+            else -> "Unknown"
+        }
+    }
+
+    private fun codecNameFromConfig(codecConfig: Any, codecType: Int): String {
+        try {
+            val extendedCodec = codecConfig.javaClass.getMethod("getExtendedCodecType").invoke(codecConfig)
+            val codecName = extendedCodec?.javaClass?.getMethod("getCodecName")?.invoke(extendedCodec) as? String
+            if (!codecName.isNullOrBlank()) return normalizeCodecName(codecName)
+            val codecId = extendedCodec?.javaClass?.getMethod("getCodecId")?.invoke(extendedCodec) as? Long
+            when (codecId) {
+                BluetoothCodecType.CODEC_ID_OPUS -> return "Opus"
+                BluetoothCodecType.CODEC_ID_LDAC -> return "LDAC"
+                BluetoothCodecType.CODEC_ID_APTX_HD -> return "aptX HD"
+                BluetoothCodecType.CODEC_ID_APTX -> return "aptX"
+                BluetoothCodecType.CODEC_ID_AAC -> return "AAC"
+                BluetoothCodecType.CODEC_ID_SBC -> return "SBC"
+            }
+        } catch (_: Exception) {
+        }
+
+        val configText = codecConfig.toString()
+        return when {
+            configText.contains("LDAC", ignoreCase = true) -> "LDAC"
+            configText.contains("APTX-HD", ignoreCase = true) ||
+                configText.contains("aptX HD", ignoreCase = true) -> "aptX HD"
+            configText.contains("APTX-LL", ignoreCase = true) ||
+                configText.contains("aptX LL", ignoreCase = true) -> "aptX LL"
+            configText.contains("APTX", ignoreCase = true) -> "aptX"
+            configText.contains("OPUS", ignoreCase = true) -> "Opus"
+            configText.contains("AAC", ignoreCase = true) -> "AAC"
+            configText.contains("SBC", ignoreCase = true) -> "SBC"
+            codecType == BluetoothCodecConfig.SOURCE_CODEC_TYPE_SBC -> "SBC"
+            codecType == BluetoothCodecConfig.SOURCE_CODEC_TYPE_AAC -> "AAC"
+            codecType == BluetoothCodecConfig.SOURCE_CODEC_TYPE_APTX -> "aptX"
+            codecType == BluetoothCodecConfig.SOURCE_CODEC_TYPE_APTX_HD -> "aptX HD"
+            codecType == BluetoothCodecConfig.SOURCE_CODEC_TYPE_LDAC -> "LDAC"
+            else -> "Unknown"
+        }
+    }
+
+    private fun normalizeCodecName(codecName: String): String {
+        return when {
+            codecName.equals("APTX HD", ignoreCase = true) ||
+                codecName.equals("APTX-HD", ignoreCase = true) -> "aptX HD"
+            codecName.equals("APTX", ignoreCase = true) -> "aptX"
+            codecName.equals("OPUS", ignoreCase = true) -> "Opus"
+            codecName.equals("LDAC", ignoreCase = true) -> "LDAC"
+            codecName.equals("AAC", ignoreCase = true) -> "AAC"
+            codecName.equals("SBC", ignoreCase = true) -> "SBC"
+            else -> codecName
+        }
+    }
     
+    override fun onResume() {
+        super.onResume()
+        handler.postDelayed(codecPollRunnable, 1000)
+    }
+
+    override fun onPause() {
+        super.onPause()
+        handler.removeCallbacks(codecPollRunnable)
+    }
+
     /**
-     * Request Companion Device Manager association for the Bluetooth device.
-     * This is required on Android 12+ to access A2DP codec information.
+     * Ensure we have the Companion Device association needed to READ codec status on this
+     * device. If missing, auto-launch the system association dialog (once). Otherwise just
+     * refresh the codec info.
      */
     @SuppressLint("MissingPermission")
+    private fun ensureCdmAssociation() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) {
+            updateCodecFromSystem()
+            return
+        }
+        val device = resolveA2dpDevice()
+        if (device == null) {
+            // A2DP not connected yet; the profile listener will retry once it is.
+            return
+        }
+        if (companionDeviceManager != null && !hasCdmAssociationForDevice(device)) {
+            if (!cdmAutoTriggered && !cdmAssociationRequested) {
+                cdmAutoTriggered = true
+                requestCdmAssociation(device)
+            }
+        } else {
+            updateCodecFromSystem()
+        }
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun hasCdmAssociationForDevice(device: BluetoothDevice): Boolean {
+        val cdm = companionDeviceManager ?: return false
+        return try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                cdm.myAssociations.any {
+                    it.deviceMacAddress?.toString()?.equals(device.address, ignoreCase = true) == true
+                }
+            } else {
+                @Suppress("DEPRECATION")
+                cdm.associations.any { it.equals(device.address, ignoreCase = true) }
+            }
+        } catch (e: Exception) {
+            false
+        }
+    }
+
     private fun requestCdmAssociation(device: BluetoothDevice) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return
         
@@ -2073,6 +2271,7 @@ class MainActivityRedesign : AppCompatActivity() {
                     android.util.Log.i("CDM", "Already have CDM association for device")
                     hasCdmAssociation = true
                     prefs.edit().putBoolean("cdm_association", true).apply()
+                    updateCodecFromSystem()
                     return
                 }
             }
@@ -2082,9 +2281,10 @@ class MainActivityRedesign : AppCompatActivity() {
         
         cdmAssociationRequested = true
         
-        // Create device filter matching the speaker by name
+        // Match the exact Bluetooth address. The speaker name is user-editable,
+        // so using it here makes CDM fail after rename.
         val deviceFilter = BluetoothDeviceFilter.Builder()
-            .setNamePattern(Pattern.compile(".*BDK.*|.*SPEAKER.*|.*${device.name?.replace(" ", ".*")}.*", Pattern.CASE_INSENSITIVE))
+            .setAddress(device.address)
             .build()
         
         val associationRequest = AssociationRequest.Builder()
@@ -2127,7 +2327,7 @@ class MainActivityRedesign : AppCompatActivity() {
     @SuppressLint("MissingPermission")
     private fun showCodecPicker() {
         val a2dp = bluetoothA2dp
-        val device = a2dpDevice
+        val device = resolveA2dpDevice()
         
         // Get available codecs from system
         val codecs = mutableListOf<Pair<String, Int>>()
@@ -2171,27 +2371,7 @@ class MainActivityRedesign : AppCompatActivity() {
         try {
             // Build codec config using reflection
             val codecConfigClass = Class.forName("android.bluetooth.BluetoothCodecConfig")
-            val constructor = codecConfigClass.getDeclaredConstructor(
-                Int::class.javaPrimitiveType,    // codecType
-                Int::class.javaPrimitiveType,    // codecPriority
-                Int::class.javaPrimitiveType,    // sampleRate
-                Int::class.javaPrimitiveType,    // bitsPerSample
-                Int::class.javaPrimitiveType,    // channelMode
-                Long::class.javaPrimitiveType,   // codecSpecific1
-                Long::class.javaPrimitiveType,   // codecSpecific2
-                Long::class.javaPrimitiveType,   // codecSpecific3
-                Long::class.javaPrimitiveType    // codecSpecific4
-            )
-            constructor.isAccessible = true
-            
-            val codecConfig = constructor.newInstance(
-                codecType,
-                1000000,  // highest priority
-                0,        // inherit sample rate
-                0,        // inherit bits per sample
-                0,        // inherit channel mode
-                0L, 0L, 0L, 0L  // codec specifics
-            )
+            val codecConfig = createSelectableCodecConfig(a2dp, device, codecType, codecConfigClass)
             
             // Set codec preference
             val setCodecMethod = a2dp.javaClass.getMethod(
@@ -2205,6 +2385,84 @@ class MainActivityRedesign : AppCompatActivity() {
         } catch (e: Exception) {
             android.util.Log.e("Codec", "Failed to set codec preference", e)
             throw e
+        }
+    }
+
+    private fun createSelectableCodecConfig(
+        a2dp: BluetoothA2dp,
+        device: BluetoothDevice,
+        codecType: Int,
+        codecConfigClass: Class<*>
+    ): Any {
+        val selected = try {
+            val getCodecStatusMethod = a2dp.javaClass.getMethod("getCodecStatus", BluetoothDevice::class.java)
+            val codecStatus = getCodecStatusMethod.invoke(a2dp, device)
+            val getSelectableMethod = codecStatus?.javaClass?.getMethod("getCodecsSelectableCapabilities")
+            val selectable = getSelectableMethod?.invoke(codecStatus) as? List<*>
+            selectable?.firstOrNull { config ->
+                config != null && codecTypeFromConfig(config) == codecType
+            }
+        } catch (e: Exception) {
+            android.util.Log.w("Codec", "Selectable codec query failed: ${e.message}")
+            null
+        }
+
+        val sampleRate = selected?.let { readIntMethod(it, "getSampleRate") } ?: BluetoothCodecConfig.SAMPLE_RATE_NONE
+        val bitsPerSample = selected?.let { readIntMethod(it, "getBitsPerSample") } ?: BluetoothCodecConfig.BITS_PER_SAMPLE_NONE
+        val channelMode = selected?.let { readIntMethod(it, "getChannelMode") } ?: BluetoothCodecConfig.CHANNEL_MODE_NONE
+        val codecSpecific1 = selected?.let { readLongMethod(it, "getCodecSpecific1") } ?: 0L
+
+        return try {
+            val builderClass = Class.forName("android.bluetooth.BluetoothCodecConfig\$Builder")
+            val builder = builderClass.getConstructor().newInstance()
+            builderClass.getMethod("setCodecType", Int::class.javaPrimitiveType).invoke(builder, codecType)
+            builderClass.getMethod("setCodecPriority", Int::class.javaPrimitiveType)
+                .invoke(builder, BluetoothCodecConfig.CODEC_PRIORITY_HIGHEST)
+            builderClass.getMethod("setSampleRate", Int::class.javaPrimitiveType).invoke(builder, sampleRate)
+            builderClass.getMethod("setBitsPerSample", Int::class.javaPrimitiveType).invoke(builder, bitsPerSample)
+            builderClass.getMethod("setChannelMode", Int::class.javaPrimitiveType).invoke(builder, channelMode)
+            builderClass.getMethod("setCodecSpecific1", Long::class.javaPrimitiveType).invoke(builder, codecSpecific1)
+            builderClass.getMethod("build").invoke(builder)
+        } catch (e: Exception) {
+            val constructor = codecConfigClass.getDeclaredConstructor(
+                Int::class.javaPrimitiveType,
+                Int::class.javaPrimitiveType,
+                Int::class.javaPrimitiveType,
+                Int::class.javaPrimitiveType,
+                Int::class.javaPrimitiveType,
+                Long::class.javaPrimitiveType,
+                Long::class.javaPrimitiveType,
+                Long::class.javaPrimitiveType,
+                Long::class.javaPrimitiveType
+            )
+            constructor.isAccessible = true
+            constructor.newInstance(
+                codecType,
+                BluetoothCodecConfig.CODEC_PRIORITY_HIGHEST,
+                sampleRate,
+                bitsPerSample,
+                channelMode,
+                codecSpecific1,
+                0L,
+                0L,
+                0L
+            )
+        }
+    }
+
+    private fun readIntMethod(target: Any, method: String): Int {
+        return try {
+            target.javaClass.getMethod(method).invoke(target) as Int
+        } catch (_: Exception) {
+            0
+        }
+    }
+
+    private fun readLongMethod(target: Any, method: String): Long {
+        return try {
+            target.javaClass.getMethod(method).invoke(target) as Long
+        } catch (_: Exception) {
+            0L
         }
     }
     
@@ -2288,11 +2546,14 @@ class MainActivityRedesign : AppCompatActivity() {
 
         Thread {
             try {
+                isSoundUploadInProgress = true
                 val localCmdChar = cmdChar ?: run {
+                    isSoundUploadInProgress = false
                     runOnUiThread { onComplete(false) }
                     return@Thread
                 }
                 val gatt = bluetoothGatt ?: run {
+                    isSoundUploadInProgress = false
                     runOnUiThread { onComplete(false) }
                     return@Thread
                 }
@@ -2307,6 +2568,7 @@ class MainActivityRedesign : AppCompatActivity() {
                 soundUploadAck = null
                 if (!writeSoundPacket(gatt, localCmdChar, startCmd)) {
                     android.util.Log.e("Sound", "Failed to write START packet")
+                    isSoundUploadInProgress = false
                     runOnUiThread { onComplete(false) }
                     return@Thread
                 }
@@ -2315,6 +2577,7 @@ class MainActivityRedesign : AppCompatActivity() {
                 var ack = waitForSoundAck(5000)
                 if (ack == null || ack.isEmpty() || ack[0] != BleUnifiedProtocol.Resp.SOUND_READY) {
                     android.util.Log.e("Sound", "No SOUND_READY received: ${ack?.contentToString()}")
+                    isSoundUploadInProgress = false
                     runOnUiThread { onComplete(false) }
                     return@Thread
                 }
@@ -2336,6 +2599,7 @@ class MainActivityRedesign : AppCompatActivity() {
                     soundUploadAck = null
                     if (!writeSoundPacket(gatt, localCmdChar, dataCmd)) {
                         android.util.Log.e("Sound", "Failed to write DATA packet seq=$seq")
+                        isSoundUploadInProgress = false
                         runOnUiThread { onComplete(false) }
                         return@Thread
                     }
@@ -2344,6 +2608,7 @@ class MainActivityRedesign : AppCompatActivity() {
                     ack = waitForSoundAck(5000)
                     if (ack == null || ack.isEmpty() || ack[0] != BleUnifiedProtocol.Resp.SOUND_READY) {
                         android.util.Log.e("Sound", "No DATA ACK for seq=$seq: ${ack?.contentToString()}")
+                        isSoundUploadInProgress = false
                         runOnUiThread { onComplete(false) }
                         return@Thread
                     }
@@ -2360,6 +2625,7 @@ class MainActivityRedesign : AppCompatActivity() {
                 soundUploadAck = null
                 if (!writeSoundPacket(gatt, localCmdChar, endCmd)) {
                     android.util.Log.e("Sound", "Failed to write END packet")
+                    isSoundUploadInProgress = false
                     runOnUiThread { onComplete(false) }
                     return@Thread
                 }
@@ -2368,15 +2634,18 @@ class MainActivityRedesign : AppCompatActivity() {
                 ack = waitForSoundAck(10000)
                 if (ack == null || ack.isEmpty() || ack[0] != BleUnifiedProtocol.Resp.SOUND_COMPLETE) {
                     android.util.Log.e("Sound", "No DONE received: ${ack?.contentToString()}")
+                    isSoundUploadInProgress = false
                     runOnUiThread { onComplete(false) }
                     return@Thread
                 }
                 
                 android.util.Log.d("Sound", "Sound upload complete: type=$soundType, size=$totalSize")
+                isSoundUploadInProgress = false
                 runOnUiThread { onComplete(true) }
 
             } catch (e: Exception) {
                 android.util.Log.e("Sound", "Sound upload error", e)
+                isSoundUploadInProgress = false
                 runOnUiThread { onComplete(false) }
             }
         }.start()
@@ -2657,6 +2926,10 @@ class MainActivityRedesign : AppCompatActivity() {
     @SuppressLint("MissingPermission")
     override fun onDestroy() {
         super.onDestroy()
+        try {
+            unregisterReceiver(codecConfigReceiver)
+        } catch (_: Exception) {
+        }
         bluetoothGatt?.close()
         bluetoothGatt = null
         
@@ -2674,6 +2947,7 @@ class MainActivityRedesign : AppCompatActivity() {
         // Clear settings callbacks
         SettingsActivity.onControlChanged = null
         SettingsActivity.onCodecSelected = null
+        SettingsActivity.onNameChanged = null
         SettingsActivity.onSoundMuteChanged = null
         SettingsActivity.onSoundDelete = null
         SettingsActivity.onSoundUpload = null
