@@ -1,0 +1,48 @@
+name: bdk_audio
+description: "BDK speaker companion for phone, tablet and desktop."
+publish_to: 'none'
+version: 0.7.2+30
+
+environment:
+  sdk: ^3.12.2
+
+dependencies:
+  flutter:
+    sdk: flutter
+  bdk_led_engine:
+    path: packages/bdk_led_engine
+  bdk_audio_decoder:
+    path: packages/bdk_audio_decoder
+  universal_ble: ^3.1.0
+  shared_preferences: ^2.5.4
+  file_picker: 13.1.0
+  audioplayers: 6.8.1
+  path_provider: 2.1.6
+  package_info_plus: 10.2.2
+  xml: ^7.0.1
+  pointycastle: ^4.0.0
+  crypto: ^3.0.7
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
+  shaders:
+    - shaders/led_diffusion.frag
+    - shaders/led_gaussian_pass.frag
+  assets:
+    - assets/branding/bdk-mark.png
+    - assets/fonts/Manrope-OFL.txt
+    - assets/fonts/Manrope-NOTICE.txt
+    - assets/fonts/SpaceGrotesk-OFL.txt
+    - assets/licenses/
+  fonts:
+    - family: Manrope
+      fonts:
+        - asset: assets/fonts/Manrope.ttf
+    - family: SpaceGrotesk
+      fonts:
+        - asset: assets/fonts/SpaceGrotesk.ttf

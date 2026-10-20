@@ -1,0 +1,3 @@
+#pragma once
+#define CONFIG_LED_MATRIX_WIDTH 16
+#define CONFIG_LED_MATRIX_HEIGHT 16

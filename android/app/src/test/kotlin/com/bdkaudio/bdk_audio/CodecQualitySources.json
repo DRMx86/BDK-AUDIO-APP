@@ -1,0 +1,42 @@
+[
+  {
+    "file": "ldac.cc",
+    "url": "https://android.googlesource.com/platform/packages/modules/Bluetooth/+/4b73ee6039271ffbf71ebdc8c109fc98eac8e137/system/stack/a2dp/a2dp_vendor_ldac.cc",
+    "sha256": "bd66039ee67cb5ea1e1e875dcd3fea361c6643712af7d248f462cffbc3b5754f"
+  },
+  {
+    "file": "ldac_encoder.cc",
+    "url": "https://android.googlesource.com/platform/packages/modules/Bluetooth/+/4b73ee6039271ffbf71ebdc8c109fc98eac8e137/system/stack/a2dp/a2dp_vendor_ldac_encoder.cc",
+    "sha256": "386cfd25b7b51c75994746c1adb5ba7e722ac75cd7b4ac14b60a88dcb9fdb77e"
+  },
+  {
+    "file": "ldac.h",
+    "url": "https://android.googlesource.com/platform/packages/modules/Bluetooth/+/4b73ee6039271ffbf71ebdc8c109fc98eac8e137/system/stack/include/a2dp_vendor_ldac_constants.h",
+    "sha256": "17358ca2eb01403df0004b97cddb4535cecaa3f4c8c86576ea827dc52e57de35"
+  },
+  {
+    "file": "quality_controller.java",
+    "url": "https://android.googlesource.com/platform/packages/apps/Settings/+/0fb38ed81e9b49d5da4be8f50d9d69865c1192e8/src/com/android/settings/development/bluetooth/BluetoothQualityDialogPreferenceController.java",
+    "sha256": "4c164ad51f295b719eee8f48a3fc839c9ae76eaec508f944ac68279769337b9a"
+  },
+  {
+    "file": "codec_framework.java",
+    "url": "https://android.googlesource.com/platform/packages/modules/Bluetooth/+/4b73ee6039271ffbf71ebdc8c109fc98eac8e137/framework/java/android/bluetooth/BluetoothCodecConfig.java",
+    "sha256": "a14150ae6fd615ebabe3c332d02084142099ea20fc1dc9e69dacd5761fe481bc"
+  },
+  {
+    "file": "lhdcv5.cc",
+    "url": "https://gitlab.com/savitech-lhdc/savitech-lhdc-codec-aosp-13.0.0_r2/-/raw/3ac44e21e92983bb800eee8cb9d938522e3852d2/src/packages/modules/Bluetooth/system/stack/a2dp/a2dp_vendor_lhdcv5.cc",
+    "sha256": "7e2b9d896f44229dcdbf2fc0ee6fc671f6a9043e838dc6efa9fa15688630744a"
+  },
+  {
+    "file": "lhdc_constants.h",
+    "url": "https://gitlab.com/savitech-lhdc/savitech-lhdc-codec-aosp-13.0.0_r2/-/raw/3ac44e21e92983bb800eee8cb9d938522e3852d2/src/packages/modules/Bluetooth/system/stack/include/a2dp_vendor_lhdc_constants.h",
+    "sha256": "1bf6266c366c6b42b46a83a88684812938293ccdb855ebd4c20bc6354ec4b36b"
+  },
+  {
+    "file": "lhdcv5_constants.h",
+    "url": "https://gitlab.com/savitech-lhdc/savitech-lhdc-codec-aosp-13.0.0_r2/-/raw/3ac44e21e92983bb800eee8cb9d938522e3852d2/src/packages/modules/Bluetooth/system/stack/include/a2dp_vendor_lhdcv5_constants.h",
+    "sha256": "1bd4d43c137ba81b5389873cf6c01a311ca12b29558fad551fa5c324145a30d7"
+  }
+]

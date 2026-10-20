@@ -1,0 +1,5 @@
+/* Presentation only: the source remains the firmware's square 16x16 matrix. */
+.effect-tile .thumbnail{position:absolute;inset:0;height:100%;display:block;overflow:hidden;isolation:isolate}
+.effect-tile canvas{position:absolute;inset:0;width:100%;height:100%;filter:none;image-rendering:auto}
+.led-card .matrix-stage .matrix,.desktop .led-card .matrix-stage .matrix{filter:blur(17px) saturate(1.12) brightness(1.05);object-fit:contain;transform:none}
+.matrix-bloom{filter:blur(46px) saturate(1.08) brightness(1.1);object-fit:cover;transform:none;opacity:.56}

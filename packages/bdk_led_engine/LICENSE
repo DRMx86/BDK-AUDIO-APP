@@ -1,0 +1,14 @@
+BDK LED engine — source provenance and distribution status
+
+This development package contains copied LED algorithms and configuration,
+plus app-side portable integration code. SOURCE_PROVENANCE.json identifies
+the copied files and records their exact hashes.
+
+Applicable copyright and redistribution terms for the copied source and
+the integration code have not yet been established for distribution.
+This notice grants no additional rights and does not assign an open-source
+license to any of those files. Source provenance is not a license grant.
+
+Publisher confirmation and the applicable original terms remain required
+release inputs. See docs/validation/branding-license-audit.md in the app
+repository for the audited evidence and unresolved distribution inputs.

@@ -1,0 +1,29 @@
+{
+  "app_version": "0.7.2",
+  "platform": "Android",
+  "device_model": "Redmagic NX809J",
+  "captured_on": "2026-10-20",
+  "images": [
+    {
+      "file": "sound.png",
+      "width": 1216,
+      "height": 2688,
+      "bytes": 534968,
+      "sha256": "9eba8e865336685dd266ac04c7c585a63f80897af089fa7353b46ed8b9132db8"
+    },
+    {
+      "file": "light.png",
+      "width": 1216,
+      "height": 2688,
+      "bytes": 928318,
+      "sha256": "629c781ded9f4f2068ae662271ce0b9ef5e00ba86d64f4c7b88afb6be31423a2"
+    },
+    {
+      "file": "audio-quality.png",
+      "width": 1216,
+      "height": 2688,
+      "bytes": 260231,
+      "sha256": "584b099b0a0ae4372cfb4afde43a6ae68104ddba4739c1756bb9aecdb30fc023"
+    }
+  ]
+}

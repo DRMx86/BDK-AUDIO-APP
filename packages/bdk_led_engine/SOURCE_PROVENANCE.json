@@ -1,0 +1,19 @@
+{
+  "sourceRoot": "D:/ESP32 Bluetooth/ESP32-A2DP-SINK-WITH-CODECS-UPDATED-main/bt_audio_sink/main",
+  "files": [
+    {
+      "file": "led/led_effects.h",
+      "sha256": "81b9573aec358d60a00e4ed4601ba523b1b9c40156e913d5bb8686c355353304"
+    },
+    {
+      "file": "led/led_config.h",
+      "sha256": "ecaa124964059bc1cd09bf8adfb07cffe77be2f5579c415d9c1c42857e985804"
+    },
+    {
+      "file": "dsp/fast_math.h",
+      "sha256": "8275dc356200094e35820dfebcd93873a5cf56373d70b75862fb2cd109df12ed"
+    }
+  ],
+  "changes": "None; memory driver and empty ESP attribute/config shims are separate files",
+  "physicalParityVerified": false
+}

@@ -1,0 +1,317 @@
+{
+  "schema": 2,
+  "mode": "profile",
+  "input": "synthetic or demo, no Bluetooth",
+  "platform": "windows",
+  "refreshHz": 240.0,
+  "physicalWidth": 1264.0,
+  "physicalHeight": 681.0,
+  "devicePixelRatio": 1.0,
+  "backgrounded": false,
+  "reducedMotion": false,
+  "rendererFailed": false,
+  "timingWatermark": true,
+  "conclusiveRun": true,
+  "scenarios": [
+    {
+      "name": "Spectrum demo",
+      "renderCalls": 180,
+      "renderMicros": 1206,
+      "fixtureTicks": 0,
+      "fixtureHzRequested": 0,
+      "activityConclusive": true,
+      "frames": 1441,
+      "conclusive": true,
+      "truncated": false,
+      "windowSeconds": 6.003926,
+      "refreshHz": 240.0,
+      "buildMs": {
+        "p50": 0.092,
+        "p95": 0.813,
+        "p99": 0.98,
+        "max": 1.082
+      },
+      "rasterMs": {
+        "p50": 0.919,
+        "p95": 0.998,
+        "p99": 1.5,
+        "max": 3.027
+      },
+      "totalSpanMs": {
+        "p50": 1.844,
+        "p95": 2.866,
+        "p99": 3.463,
+        "max": 5.15
+      },
+      "uiOrRasterOverDisplayBudget": 0,
+      "uiOrRasterOverPreviewBudget": 0
+    },
+    {
+      "name": "Fire demo",
+      "renderCalls": 181,
+      "renderMicros": 1074,
+      "fixtureTicks": 0,
+      "fixtureHzRequested": 0,
+      "activityConclusive": true,
+      "frames": 1441,
+      "conclusive": true,
+      "truncated": false,
+      "windowSeconds": 6.003926,
+      "refreshHz": 240.0,
+      "buildMs": {
+        "p50": 0.094,
+        "p95": 0.803,
+        "p99": 1.004,
+        "max": 1.083
+      },
+      "rasterMs": {
+        "p50": 0.914,
+        "p95": 1.051,
+        "p99": 2.734,
+        "max": 4.583
+      },
+      "totalSpanMs": {
+        "p50": 1.761,
+        "p95": 3.07,
+        "p99": 3.661,
+        "max": 5.638
+      },
+      "uiOrRasterOverDisplayBudget": 2,
+      "uiOrRasterOverPreviewBudget": 0
+    },
+    {
+      "name": "Plasma demo",
+      "renderCalls": 180,
+      "renderMicros": 1686,
+      "fixtureTicks": 0,
+      "fixtureHzRequested": 0,
+      "activityConclusive": true,
+      "frames": 1441,
+      "conclusive": true,
+      "truncated": false,
+      "windowSeconds": 6.003926,
+      "refreshHz": 240.0,
+      "buildMs": {
+        "p50": 0.093,
+        "p95": 0.79,
+        "p99": 0.963,
+        "max": 1.169
+      },
+      "rasterMs": {
+        "p50": 0.917,
+        "p95": 1.039,
+        "p99": 2.897,
+        "max": 4.068
+      },
+      "totalSpanMs": {
+        "p50": 1.804,
+        "p95": 3.041,
+        "p99": 3.771,
+        "max": 4.8
+      },
+      "uiOrRasterOverDisplayBudget": 0,
+      "uiOrRasterOverPreviewBudget": 0
+    },
+    {
+      "name": "Kaleidoscope demo",
+      "renderCalls": 181,
+      "renderMicros": 1353,
+      "fixtureTicks": 0,
+      "fixtureHzRequested": 0,
+      "activityConclusive": true,
+      "frames": 1440,
+      "conclusive": true,
+      "truncated": false,
+      "windowSeconds": 6.003926,
+      "refreshHz": 240.0,
+      "buildMs": {
+        "p50": 0.094,
+        "p95": 0.784,
+        "p99": 0.956,
+        "max": 1.207
+      },
+      "rasterMs": {
+        "p50": 0.918,
+        "p95": 1.044,
+        "p99": 4.159,
+        "max": 5.185
+      },
+      "totalSpanMs": {
+        "p50": 1.773,
+        "p95": 3.175,
+        "p99": 4.737,
+        "max": 6.34
+      },
+      "uiOrRasterOverDisplayBudget": 14,
+      "uiOrRasterOverPreviewBudget": 0
+    },
+    {
+      "name": "Bass Reactor demo",
+      "renderCalls": 180,
+      "renderMicros": 1314,
+      "fixtureTicks": 0,
+      "fixtureHzRequested": 0,
+      "activityConclusive": true,
+      "frames": 1447,
+      "conclusive": true,
+      "truncated": false,
+      "windowSeconds": 6.003926,
+      "refreshHz": 240.0,
+      "buildMs": {
+        "p50": 0.097,
+        "p95": 0.817,
+        "p99": 0.948,
+        "max": 1.121
+      },
+      "rasterMs": {
+        "p50": 0.943,
+        "p95": 1.898,
+        "p99": 4.51,
+        "max": 7.042
+      },
+      "totalSpanMs": {
+        "p50": 1.814,
+        "p95": 3.558,
+        "p99": 4.957,
+        "max": 7.462
+      },
+      "uiOrRasterOverDisplayBudget": 25,
+      "uiOrRasterOverPreviewBudget": 0
+    },
+    {
+      "name": "Ambient demo",
+      "renderCalls": 180,
+      "renderMicros": 1489,
+      "fixtureTicks": 0,
+      "fixtureHzRequested": 0,
+      "activityConclusive": true,
+      "frames": 1440,
+      "conclusive": true,
+      "truncated": false,
+      "windowSeconds": 6.003927,
+      "refreshHz": 240.0,
+      "buildMs": {
+        "p50": 0.104,
+        "p95": 0.934,
+        "p99": 1.196,
+        "max": 1.76
+      },
+      "rasterMs": {
+        "p50": 0.994,
+        "p95": 1.148,
+        "p99": 2.113,
+        "max": 11.082
+      },
+      "totalSpanMs": {
+        "p50": 1.874,
+        "p95": 3.052,
+        "p99": 3.646,
+        "max": 11.691
+      },
+      "uiOrRasterOverDisplayBudget": 2,
+      "uiOrRasterOverPreviewBudget": 0
+    },
+    {
+      "name": "Fixture input 30 Hz",
+      "renderCalls": 180,
+      "renderMicros": 1248,
+      "fixtureTicks": 182,
+      "fixtureHzRequested": 30,
+      "activityConclusive": true,
+      "frames": 1439,
+      "conclusive": true,
+      "truncated": false,
+      "windowSeconds": 6.003926,
+      "refreshHz": 240.0,
+      "buildMs": {
+        "p50": 0.103,
+        "p95": 1.501,
+        "p99": 1.885,
+        "max": 2.229
+      },
+      "rasterMs": {
+        "p50": 0.956,
+        "p95": 1.84,
+        "p99": 3.244,
+        "max": 15.229
+      },
+      "totalSpanMs": {
+        "p50": 1.984,
+        "p95": 3.739,
+        "p99": 4.8,
+        "max": 15.899
+      },
+      "uiOrRasterOverDisplayBudget": 3,
+      "uiOrRasterOverPreviewBudget": 0
+    },
+    {
+      "name": "Fixture input 60 Hz",
+      "renderCalls": 181,
+      "renderMicros": 1210,
+      "fixtureTicks": 375,
+      "fixtureHzRequested": 60,
+      "activityConclusive": true,
+      "frames": 1439,
+      "conclusive": true,
+      "truncated": false,
+      "windowSeconds": 6.003926,
+      "refreshHz": 240.0,
+      "buildMs": {
+        "p50": 0.104,
+        "p95": 1.686,
+        "p99": 1.919,
+        "max": 2.386
+      },
+      "rasterMs": {
+        "p50": 0.942,
+        "p95": 1.197,
+        "p99": 3.032,
+        "max": 4.66
+      },
+      "totalSpanMs": {
+        "p50": 2.012,
+        "p95": 3.837,
+        "p99": 4.554,
+        "max": 5.807
+      },
+      "uiOrRasterOverDisplayBudget": 4,
+      "uiOrRasterOverPreviewBudget": 0
+    },
+    {
+      "name": "Fixture input 100 Hz",
+      "renderCalls": 180,
+      "renderMicros": 1110,
+      "fixtureTicks": 600,
+      "fixtureHzRequested": 100,
+      "activityConclusive": true,
+      "frames": 1436,
+      "conclusive": true,
+      "truncated": false,
+      "windowSeconds": 6.003926,
+      "refreshHz": 240.0,
+      "buildMs": {
+        "p50": 0.142,
+        "p95": 1.529,
+        "p99": 1.75,
+        "max": 1.904
+      },
+      "rasterMs": {
+        "p50": 0.928,
+        "p95": 2.1,
+        "p99": 4.008,
+        "max": 11.497
+      },
+      "totalSpanMs": {
+        "p50": 2.311,
+        "p95": 4.034,
+        "p99": 5.35,
+        "max": 12.512
+      },
+      "uiOrRasterOverDisplayBudget": 14,
+      "uiOrRasterOverPreviewBudget": 0
+    }
+  ],
+  "state": "complete",
+  "runId": "1792178129855878-1783272341",
+  "processId": 31352
+}

@@ -1,0 +1,10 @@
+Bundled font metadata
+
+Manrope Version 4.505, unchanged font binary.
+Copyright 2019 The Manrope Project Authors (https://github.com/googlefonts/manrope)
+
+The copyright line above is retained from the bundled font's name table.
+The accompanying upstream OFL text retains its separate 2018 copyright line.
+Both notices are supplied without rewriting either original statement.
+
+Font SHA256: 3ae11c49db0455a3cc33e37d380f20fdb8c7f8b41dc07625c177e3d87a9d6ae6

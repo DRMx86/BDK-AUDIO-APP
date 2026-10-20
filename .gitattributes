@@ -1,0 +1,13 @@
+# Preserve byte-identical copied firmware sources for provenance verification.
+packages/bdk_led_engine/src/led/led_effects.h -text
+packages/bdk_led_engine/src/led/led_config.h -text
+packages/bdk_led_engine/src/dsp/fast_math.h -text
+# Preserve pinned third-party decoder provenance across Windows checkouts.
+# Keep upstream's existing whitespace along with its exact source bytes.
+packages/bdk_audio_decoder/src/vendor/miniaudio/miniaudio.h -text -whitespace
+packages/bdk_audio_decoder/src/vendor/miniaudio/LICENSE -text
+*.sh text eol=lf
+# Retain audited third-party notice copies byte-for-byte across checkouts.
+assets/licenses/* -text
+# Renderer raster fixtures retain their exact RGBA bytes.
+test/fixtures/led/*.rgba -text

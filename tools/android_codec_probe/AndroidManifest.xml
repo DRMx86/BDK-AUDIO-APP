@@ -1,0 +1,13 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="com.bdkaudio.codecprobe">
+    <uses-sdk android:minSdkVersion="26" android:targetSdkVersion="36"/>
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT"/>
+    <application android:label="BDK Codec API Probe" android:hasCode="true"/>
+    <instrumentation android:name="com.bdkaudio.codecprobe.CodecProbe"
+        android:targetPackage="com.bdkaudio.controller" android:functionalTest="true"/>
+    <instrumentation android:name="com.bdkaudio.codecprobe.LHDCPreferenceCheck"
+        android:targetPackage="com.bdkaudio.controller" android:functionalTest="true"/>
+    <instrumentation android:name="com.bdkaudio.codecprobe.LDACPreferenceCheck"
+        android:targetPackage="com.bdkaudio.controller" android:functionalTest="true"/>
+    <instrumentation android:name="com.bdkaudio.codecprobe.UiProbe"
+        android:targetPackage="com.bdkaudio.codecprobe" android:functionalTest="true"/>
+</manifest>

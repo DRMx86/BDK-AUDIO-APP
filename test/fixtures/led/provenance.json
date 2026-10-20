@@ -1,0 +1,84 @@
+{
+  "format": "16x16 straight RGBA8888, row-major, 64 bytes per row",
+  "sampling": "One context; effects 0..21 sequentially, 72 demo frames per effect; retain first maximum sum(R+G+B) frame.",
+  "library": "Windows x64 app-owned LED capsule packaged with 0.5.7+15",
+  "library_sha256": "7e6e80374fe31c5478a09f6d2b5ecb6a39a3d88c72e9d7409187670aca6108fe",
+  "fixtures": [
+    {
+      "file": "effect-01.rgba",
+      "effect": 1,
+      "payload": [
+        1,
+        85,
+        50,
+        116,
+        217,
+        255,
+        188,
+        154,
+        255,
+        1
+      ],
+      "frame_index": 29,
+      "rgb_energy": 82432,
+      "sha256": "055a122679f91b02fbdd5f67a9f75c4ce37d8650cf2a3135e5b7df9c44250f6f"
+    },
+    {
+      "file": "effect-03.rgba",
+      "effect": 3,
+      "payload": [
+        3,
+        85,
+        50,
+        116,
+        217,
+        255,
+        188,
+        154,
+        255,
+        1
+      ],
+      "frame_index": 39,
+      "rgb_energy": 29597,
+      "sha256": "81354a3bc768ee77f61a0258402420c210cecbfb403eb59f6a5c1755baead435"
+    },
+    {
+      "file": "effect-11.rgba",
+      "effect": 11,
+      "payload": [
+        11,
+        85,
+        50,
+        116,
+        217,
+        255,
+        188,
+        154,
+        255,
+        1
+      ],
+      "frame_index": 35,
+      "rgb_energy": 28055,
+      "sha256": "fd75574993ea424bb86110d59ce2a429f3bfc0ccbc16b3e3d3bb89bbd02debf8"
+    },
+    {
+      "file": "effect-15.rgba",
+      "effect": 15,
+      "payload": [
+        15,
+        85,
+        50,
+        116,
+        217,
+        255,
+        188,
+        154,
+        255,
+        1
+      ],
+      "frame_index": 48,
+      "rgb_energy": 3278,
+      "sha256": "71a2feadd51114935ad7ec3f3f13d405f8d67fc877f6d6ba87d1ab95a22ce47a"
+    }
+  ]
+}

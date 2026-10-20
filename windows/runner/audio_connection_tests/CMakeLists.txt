@@ -1,0 +1,7 @@
+cmake_minimum_required(VERSION 3.14)
+project(bdk_audio_connection_tests LANGUAGES CXX)
+add_executable(bdk_audio_connection_tests audio_connection_native_test.cpp ../audio_connection_model.cpp ../audio_connection_snapshot.cpp ../audio_connection_worker.cpp)
+target_compile_definitions(bdk_audio_connection_tests PRIVATE UNICODE _UNICODE NOMINMAX)
+target_link_libraries(bdk_audio_connection_tests PRIVATE ole32 propsys setupapi bthprops uuid)
+target_compile_features(bdk_audio_connection_tests PRIVATE cxx_std_17)
+target_compile_options(bdk_audio_connection_tests PRIVATE /W4 /WX /EHsc)

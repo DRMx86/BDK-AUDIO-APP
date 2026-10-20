@@ -1,0 +1,59 @@
+{
+  "component": "miniaudio",
+  "version": "0.11.25",
+  "tag": "0.11.25",
+  "commit": "9634bedb5b5a2ca38c1ee7108a9358a4e233f14d",
+  "release": "https://github.com/mackron/miniaudio/releases/tag/0.11.25",
+  "manual": "https://miniaud.io/docs/manual/index.html#Decoding",
+  "licenseSelected": "MIT No Attribution",
+  "upstreamFilesModified": false,
+  "files": [
+    {
+      "path": "src/vendor/miniaudio/miniaudio.h",
+      "source": "https://raw.githubusercontent.com/mackron/miniaudio/0.11.25/miniaudio.h",
+      "sha256": "ac7af4de748b7e26b777f37e01cee313a308a7296a3eb080e2906b320cc55c89"
+    },
+    {
+      "path": "src/vendor/miniaudio/LICENSE",
+      "source": "https://raw.githubusercontent.com/mackron/miniaudio/0.11.25/LICENSE",
+      "sha256": "457f1b500e0adf6bc059edddfa78a2f62012e7c3bb43476c20e0bd23b25ba0eb"
+    }
+  ],
+  "compileFeaturesDisabled": [
+    "MA_NO_DEVICE_IO",
+    "MA_NO_ENGINE",
+    "MA_NO_RESOURCE_MANAGER",
+    "MA_NO_NODE_GRAPH",
+    "MA_NO_ENCODING",
+    "MA_NO_GENERATION",
+    "MA_NO_THREADING",
+    "MA_NO_CUSTOM",
+    "MA_NO_VORBIS"
+  ],
+  "nativePlatformsValidated": [
+    "Windows x64 native DLL, real Media Foundation AAC/M4A/Ogg decode, Dart FFI/isolate calls"
+  ],
+  "nativePlatformsNotValidated": [
+    "Android runtime",
+    "iOS compile/runtime",
+    "macOS compile/runtime",
+    "Linux compile/runtime"
+  ],
+  "hardwareOrPlaybackValidation": false,
+  "nativeCompileEvidence": {
+    "Android": [
+      "NDK 28.2.13676358",
+      "Clang 19.0.1",
+      "android-24",
+      "arm64-v8a",
+      "armeabi-v7a",
+      "mediandk linked"
+    ]
+  },
+  "platformBackends": {
+    "Windows": "Media Foundation Source Reader with bounded IStream",
+    "Android": "NDK MediaExtractor/MediaCodec with fd offset and length",
+    "Apple": "AVFoundation resource loader/AssetReader source prepared; Apple SDK unavailable",
+    "Linux": "No native compressed fallback; miniaudio WAV/MP3/FLAC only"
+  }
+}

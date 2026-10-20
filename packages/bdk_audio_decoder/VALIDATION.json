@@ -1,0 +1,198 @@
+{
+  "checkedAt": "2026-10-16T17:20:54.153287+00:00",
+  "host": "Windows-11-10.0.26200-SP0",
+  "artifacts": [
+    {
+      "target": "Windows x64",
+      "path": "build/native/Release/bdk_audio_decoder.dll",
+      "bytes": 307712,
+      "sha256": "74ef2bf87c68f19d0f52f7bbfb8d85c666caba66dcdae823d343b48938355976"
+    },
+    {
+      "target": "Android arm64-v8a API24",
+      "path": "build/android-arm64/libbdk_audio_decoder.so",
+      "bytes": 5299768,
+      "sha256": "75b1d8b48b148058a294b5991a5ecc98d98070481cacfdfa65c6a89ef8790133"
+    },
+    {
+      "target": "Android armeabi-v7a API24",
+      "path": "build/android-armv7/libbdk_audio_decoder.so",
+      "bytes": 4020496,
+      "sha256": "49a936c9675edd4a42070fbbafa510d800b43b9d02eb4567127865c1d54ae015"
+    }
+  ],
+  "nativeCApiTestsPassed": 16,
+  "pcmWindowTestsPassed": 1,
+  "dartTestsPassed": 5,
+  "dartAnalyze": "No issues found",
+  "windowsNativeRuntimeCapabilities": {
+    "real.m4a": {
+      "code": 0,
+      "sampleRate": 16000,
+      "channels": 1,
+      "frames": 32000
+    },
+    "real.aac": {
+      "code": 0,
+      "sampleRate": 16000,
+      "channels": 1,
+      "frames": 33792
+    },
+    "tagged.aac": {
+      "code": 0,
+      "sampleRate": 16000,
+      "channels": 1,
+      "frames": 33792
+    },
+    "real.ogg": {
+      "code": 0,
+      "sampleRate": 16000,
+      "channels": 1,
+      "frames": 32000
+    }
+  },
+  "androidCompile": {
+    "ndk": "28.2.13676358",
+    "clang": "19.0.1",
+    "api": 24,
+    "abis": [
+      "arm64-v8a",
+      "armeabi-v7a"
+    ],
+    "linkedLibrary": "mediandk",
+    "runtimeValidation": true,
+    "runtimeValidatedAbi": "arm64-v8a",
+    "compileOnlyAbis": [
+      "armeabi-v7a"
+    ]
+  },
+  "apple": {
+    "sourcePrepared": true,
+    "compiled": false,
+    "reason": "No xcrun or Apple SDK installed on this Windows host"
+  },
+  "linuxRuntimeValidated": false,
+  "pinnedUpstreamHashesVerified": true,
+  "upstreamFilesModified": false,
+  "upstreamWarning": "Existing MSVC C4244 miniaudio.h:80532",
+  "fixtureGenerator": "ffmpeg version 9.0.2-full_build-www.gyan.dev Copyright (c) 2000-2026 the FFmpeg developers",
+  "windowsOptionalMediaFoundation": {
+    "checkedSystemLibraryProbe": true,
+    "delayImportsVerified": [
+      "MFPlat.DLL",
+      "MFReadWrite.dll"
+    ],
+    "missingFeatureRuntimeTested": false
+  },
+  "androidNativeRuntime": {
+    "device": "Redmagic NX809J",
+    "serial": "9125299103B7",
+    "androidRelease": "16",
+    "api": 36,
+    "abi": "arm64-v8a",
+    "kind": "offline native C ABI diagnostic executable; not installed app validation",
+    "casesPassed": 174,
+    "allPassed": true,
+    "receipt": "build/android-runtime-green.json",
+    "receiptSha256": "fd16600eeb5794b9e6ef11ea76d66f506d6696962352e153b128e79eb6d6023e",
+    "capabilities": {
+      "ramp.wav": {
+        "code": 0,
+        "sampleRate": 16000,
+        "channels": 1,
+        "frames": 32000
+      },
+      "chunks.wav": {
+        "code": 0,
+        "sampleRate": 16000,
+        "channels": 1,
+        "frames": 32000
+      },
+      "float.wav": {
+        "code": 0,
+        "sampleRate": 16000,
+        "channels": 1,
+        "frames": 32000
+      },
+      "extensible.wav": {
+        "code": 0,
+        "sampleRate": 16000,
+        "channels": 6,
+        "frames": 32000
+      },
+      "real.mp3": {
+        "code": 0,
+        "sampleRate": 16000,
+        "channels": 1,
+        "frames": 32000
+      },
+      "real.flac": {
+        "code": 0,
+        "sampleRate": 16000,
+        "channels": 1,
+        "frames": 32000
+      },
+      "real.m4a": {
+        "code": 0,
+        "sampleRate": 16000,
+        "channels": 1,
+        "frames": 32000
+      },
+      "real.aac": {
+        "code": 0,
+        "sampleRate": 16000,
+        "channels": 1,
+        "frames": 33792
+      },
+      "tagged.aac": {
+        "code": 0,
+        "sampleRate": 16000,
+        "channels": 1,
+        "frames": 33792
+      },
+      "real.ogg": {
+        "code": 0,
+        "sampleRate": 16000,
+        "channels": 1,
+        "frames": 32000
+      },
+      "cache.audio": {
+        "code": 0,
+        "sampleRate": 16000,
+        "channels": 1,
+        "frames": 32000
+      },
+      "stereo.m4a": {
+        "code": 0,
+        "sampleRate": 44100,
+        "channels": 2,
+        "frames": 88200
+      }
+    },
+    "exactM4aRegression": {
+      "beforeCode": 9,
+      "beforeWritten": 0,
+      "afterCode": 0,
+      "afterWritten": 44100,
+      "outputRate": 22050,
+      "nonzero": 44098
+    },
+    "excerptComparisonMaximumAllowedPcmDelta": 2,
+    "lateExcerpt": {
+      "sourceSeconds": 120,
+      "startSeconds": 110,
+      "samples": 1000,
+      "outputRate": 22050,
+      "secondsIncludingAdb": 0.734
+    },
+    "diagnosticsEnabledInTestedLibrary": false,
+    "remoteLibrarySha256": "75b1d8b48b148058a294b5991a5ecc98d98070481cacfdfa65c6a89ef8790133"
+  },
+  "operationsPerformed": {
+    "offlineNativeDecoderOnAuthorizedPhone": true,
+    "adbTaskOwnedTemporaryFilesProvisioned": true,
+    "audioPlaybackOrRouteChanges": false,
+    "appInstallationOrUiActions": false,
+    "settingsBleSerialSpeakerFirmwareOrPhysicalTransfers": false
+  }
+}

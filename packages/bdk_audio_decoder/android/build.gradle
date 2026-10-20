@@ -1,0 +1,19 @@
+group = "com.bdkaudio.bdk_audio_decoder"
+version = "1.0"
+buildscript {
+    repositories { google(); mavenCentral() }
+    dependencies { classpath("com.android.tools.build:gradle:9.0.1") }
+}
+rootProject.allprojects { repositories { google(); mavenCentral() } }
+apply plugin: "com.android.library"
+android {
+    namespace = "com.bdkaudio.bdk_audio_decoder"
+    compileSdk = 36
+    ndkVersion = android.ndkVersion
+    externalNativeBuild { cmake { path = "../src/CMakeLists.txt" } }
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+    }
+    defaultConfig { minSdk = 24 }
+}
