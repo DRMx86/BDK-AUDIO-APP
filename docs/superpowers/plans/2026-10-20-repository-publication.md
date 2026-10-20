@@ -12,7 +12,7 @@
 - [x] Write a concise README with features, setup, build commands, platform status, documentation and licensing.
 - [x] Check all documentation links, images, snapshot fidelity and sensitive/generated-file exclusions.
 - [x] Review the GitHub-rendered markup and image loading; address independent review findings.
-- [ ] Commit and fast-forward push to the existing main branch, then verify GitHub readback.
+- [x] Commit and fast-forward push to the existing main branch, then verify GitHub readback.
 
 ## Constraints
 
@@ -31,3 +31,5 @@
 - The freshly built native renderer passed all 25 tests.
 - Independent review verified local references, source fidelity and screenshot hashes/dimensions, and caught the legacy wrapper's non-executable Git mode. The documentation now invokes it through `sh` without changing the archived wrapper.
 - GitHub's Markdown API rendered the README successfully; browser DOM checks confirmed all seven images loaded, with equal screenshot display dimensions. Browser screenshot capture timed out, so no captured browser-image visual check is claimed.
+- Published source and README commit: `ccfd661b814a5e48c800474ff5752f2adbb1aeb7`. GitHub's branch, README content and all three screenshot blob IDs matched local readback. The original GitHub main remains an ancestor.
+- Updated the repository description and added Flutter, Dart and Bluetooth LE topics while retaining existing topics. The actual public GitHub page displays the new README and metadata.
