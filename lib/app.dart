@@ -94,6 +94,7 @@ class _BdkAppState extends State<BdkApp> with WidgetsBindingObserver {
   bool _foreground = true;
   final _meterPreview = MeterPreviewProcessor();
   PreviewAudioSample _previewSample = PreviewAudioSample.silent;
+  DateTime? _previewBeatAt;
   late final AudioConfigSummaryController _audioSummary;
   bool _audioQualityOpen = false;
   @override
@@ -191,12 +192,28 @@ class _BdkAppState extends State<BdkApp> with WidgetsBindingObserver {
     final lostControls = speaker.connected && !next.connected && !_demoMode;
     if (next.deviceId != speaker.deviceId || !next.connected) {
       _meterPreview.reset();
+      _previewBeatAt = null;
     }
     if (next.connected && next.deviceId != _lightPowerDeviceId) {
       _lightPowerMemory = LightPowerMemory();
       _lightPowerDeviceId = next.deviceId;
     }
-    _previewSample = _meterPreview.update(next.meter, now: DateTime.now());
+    final now = DateTime.now();
+    _previewSample = _meterPreview.update(next.meter, now: now);
+    final beatAge = _previewBeatAt == null
+        ? null
+        : now.difference(_previewBeatAt!);
+    if (next.meter == null ||
+        !next.meter!.isFresh(now) ||
+        (beatAge != null &&
+            (beatAge.isNegative || beatAge.inMilliseconds >= 500))) {
+      _previewBeatAt = null;
+    }
+    if (next.connected && _previewSample.beat) {
+      // Levels may be replaced several times before Flutter builds a frame.
+      // Preserve the onset's identity separately; the renderer consumes it once.
+      _previewBeatAt = next.meter?.receivedAt;
+    }
     setState(() {
       if (next.eq != speaker.eq && !_pending.contains('eq')) {
         eq = next.eq;
@@ -449,7 +466,8 @@ class _BdkAppState extends State<BdkApp> with WidgetsBindingObserver {
               meter: speaker.meter,
               connected: speaker.connected && !_demoMode,
               previewAudio: _previewSample.values,
-              previewBeat: _previewSample.beat,
+              previewBeat: _previewBeatAt != null,
+              previewBeatAt: _previewBeatAt,
               previewAudioActive: _previewSample.audioActive,
             ),
             _speaker(context),

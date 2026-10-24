@@ -1,8 +1,20 @@
 # Flutter migration status
 
-2026-10-20. The universal port remains incomplete; Android 0.7.2 is the current
-internal functional checkpoint. Work stays in the separate BDK-Audio-Flutter
-repository, branch codex/flutter-port.
+Updated 2026-10-24. The universal port remains incomplete; the installed Android
+0.7.2 build remains the current internal functional checkpoint. Active Flutter
+source is at the repository root on `main`. The original Kotlin app is preserved
+at its original root on the
+[`legacy-kotlin` branch](https://github.com/WillyBilly06/BDK-AUDIO-APP/tree/legacy-kotlin).
+
+The [beat-source comparison](../validation/2026-10-24-beat-source-comparison.md)
+documents the read-only ESP32 investigation and an app-only fix for detected
+onsets lost between notification delivery and a UI frame. A new timestamp
+handoff preserves the latest onset separately from changing level samples. This source
+change has not been installed on the phone. The
+[owner-controls proposal](../proposals/owner-controls.md) considers issue #15;
+speaker-wide protection is not implemented.
+
+## Android 0.7.2 checkpoint — 2026-10-20
 
 Implemented: focused Sound/Light/Speaker navigation; original active presets,
 custom profiles and Android export import; fixed-band tone controls and accurate
@@ -26,7 +38,7 @@ delay and preserve state across reduced-motion changes. Brightness-only changes
 use command 0x07 instead of resetting the effect. Meter onsets use timestamp-aware
 adaptive flux; synthetic results and their weak-dynamics limits are documented.
 
-Fresh integration evidence: 699 Flutter tests passed, two skipped; analyzer clean;
+Checkpoint integration evidence: 699 Flutter tests passed, two skipped; analyzer clean;
 25 native renderer tests and 13 native codec checks passed; ARM64 release-mode
 APK compiled with normal main and preview-only false. Package, installed phone
 evidence and remaining gates are in the
@@ -46,5 +58,6 @@ The internal APK keeps the existing development certificate for a data-preservin
 upgrade; public signing, platform release packaging and broad device validation
 remain open. Original Android app and unrelated Linux WIP are preserved.
 
-No ESP32 source access, firmware edits/builds, serial operations or flashing are
-part of this completion. Existing BLE packets are the only speaker preview input.
+The 0.7.2 completion used no ESP32 source access, firmware edits/builds, serial
+operations or flashing. The later 2026-10-24 source comparison is read-only;
+existing BLE packets remain the only speaker preview input.

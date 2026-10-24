@@ -18,7 +18,7 @@ A Flutter companion for BDK ESP32 Bluetooth speakers.
 
 Shape your sound, personalize the lights and manage your speaker from one focused interface. BDK Audio brings visual presets, three-band equalization, diffused LED previews and detailed Bluetooth audio preferences together in dedicated Sound, Light and Speaker pages.
 
-The Flutter app is the active implementation at the repository root. The original Kotlin app is preserved in [`legacy/kotlin/`](legacy/kotlin/), with the repository's earlier history intact.
+The Flutter app is the active implementation on `main`. The original Android/Kotlin Multiplatform app is preserved at its original project root on the [`legacy-kotlin` branch](https://github.com/WillyBilly06/BDK-AUDIO-APP/tree/legacy-kotlin), with its earlier history intact.
 
 ## Screenshots
 
@@ -142,8 +142,9 @@ packages/bdk_audio_decoder/ Native audio import/decoding support
 shaders/                    GPU diffusion passes
 test/                       Unit and widget coverage
 docs/                       User guide, platform evidence and implementation notes
-legacy/kotlin/              Original Android/Kotlin Multiplatform application
 ```
+
+For the original application, switch to the [`legacy-kotlin` branch](https://github.com/WillyBilly06/BDK-AUDIO-APP/tree/legacy-kotlin). Its Gradle project and original README remain at that branch's root.
 
 ## Documentation
 
@@ -152,7 +153,9 @@ legacy/kotlin/              Original Android/Kotlin Multiplatform application
 - [Platform matrix](docs/platform-release-matrix.md) — native evidence, build instructions and remaining release work.
 - [Migration status](docs/migration/STATUS.md) — the Flutter port's current scope.
 - [Codec source contract](lib/features/codec/SOURCE_CONTRACT.md) — capability, identity and bitrate rules.
-- [Original application](legacy/README.md) — preserved Kotlin source and its original documentation.
+- [Beat source comparison](docs/validation/2026-10-24-beat-source-comparison.md) — ESP32 detection, phone input limits and the app handoff correction.
+- [Owner controls proposal](docs/proposals/owner-controls.md) — guest playback and protected settings, under consideration.
+- [Original application](https://github.com/WillyBilly06/BDK-AUDIO-APP/tree/legacy-kotlin) — preserved Kotlin source and its original documentation on a separate branch.
 - [Speaker firmware project](https://github.com/WillyBilly06/ESP32-A2DP-SINK-WITH-CODECS-UPDATED) — the companion hardware project.
 
 ## License and credits

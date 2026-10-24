@@ -73,6 +73,7 @@ class LightScreen extends StatefulWidget {
     this.powerMemory,
     this.previewAudio,
     this.previewBeat = false,
+    this.previewBeatAt,
     this.previewAudioActive = false,
   });
   final LedSettings settings;
@@ -83,6 +84,9 @@ class LightScreen extends StatefulWidget {
   final LightPowerMemory? powerMemory;
   final List<double>? previewAudio;
   final bool previewBeat, previewAudioActive;
+
+  /// Stable onset identity, independent of subsequent level notifications.
+  final DateTime? previewBeatAt;
 
   @override
   State<LightScreen> createState() => _LightScreenState();
@@ -228,6 +232,7 @@ class _LightScreenState extends State<LightScreen>
   @override
   void didUpdateWidget(covariant LightScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
+    var renderSettingsFrame = false;
     _powerMemory.remember(widget.settings);
     if (oldWidget.settings != widget.settings) {
       if (oldWidget.settings.color1 != widget.settings.color1 ||
@@ -253,7 +258,7 @@ class _LightScreenState extends State<LightScreen>
       try {
         _renderer?.configure(widget.settings.toPayload());
         if (_timingDiagnostics) _diagnosticSettings++;
-        if (!keepClock) _renderFrame(force: true);
+        renderSettingsFrame = !keepClock;
       } catch (_) {
         _previewError = 'Firmware preview unavailable on this device';
       }
@@ -265,6 +270,7 @@ class _LightScreenState extends State<LightScreen>
     }
     if (oldWidget.previewAudio != widget.previewAudio ||
         oldWidget.previewBeat != widget.previewBeat ||
+        oldWidget.previewBeatAt != widget.previewBeatAt ||
         oldWidget.previewAudioActive != widget.previewAudioActive ||
         oldWidget.connected != widget.connected ||
         oldWidget.meter != widget.meter) {
@@ -276,9 +282,17 @@ class _LightScreenState extends State<LightScreen>
         _queuedBeatAt = null;
       } else if (widget.meter == null || _audioEstimate == null) {
         _queuedBeatAt = null;
-      } else if (widget.previewBeat &&
-          widget.meter?.receivedAt != _lastBeatAt) {
-        _queuedBeatAt = widget.meter?.receivedAt;
+      } else if (oldWidget.previewBeatAt != null &&
+          widget.previewBeatAt == null &&
+          !widget.previewBeat) {
+        _queuedBeatAt = null;
+      } else {
+        final beatAt =
+            widget.previewBeatAt ??
+            (widget.previewBeat ? widget.meter?.receivedAt : null);
+        if (beatAt != null && beatAt != _lastBeatAt) {
+          _queuedBeatAt = beatAt;
+        }
       }
       if (oldWidget.connected != widget.connected) {
         _generation++;
@@ -286,6 +300,8 @@ class _LightScreenState extends State<LightScreen>
       }
       _syncAnimation();
     }
+    // A forced effect-change frame must see any simultaneous input invalidation.
+    if (renderSettingsFrame) _renderFrame(force: true);
   }
 
   List<double>? get _audioEstimate {
@@ -438,13 +454,19 @@ class _LightScreenState extends State<LightScreen>
       final idle = _spectrumIdle;
       final receivedAt =
           _queuedBeatAt ??
+          widget.previewBeatAt ??
           (widget.previewBeat ? widget.meter?.receivedAt : null);
+      final beatAge = receivedAt == null
+          ? null
+          : DateTime.now().difference(receivedAt);
       final beat =
           !idle &&
           audio != null &&
           widget.meter != null &&
           receivedAt != null &&
-          DateTime.now().difference(receivedAt).inMilliseconds < 500 &&
+          beatAge != null &&
+          !beatAge.isNegative &&
+          beatAge.inMilliseconds < 500 &&
           receivedAt != _lastBeatAt;
       if (beat) _lastBeatAt = receivedAt;
       _queuedBeatAt = null;
