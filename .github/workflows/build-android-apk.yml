@@ -52,6 +52,9 @@ jobs:
           git -C "$sdk" remote add origin https://github.com/flutter/flutter.git
           git -C "$sdk" fetch --depth=1 origin ad70ec4617166f1c38e5d2bfd388af71fda14f06
           git -C "$sdk" checkout --detach FETCH_HEAD
+          # A shallow fetch of one commit carries no tags, so Flutter would
+          # report version 0.0.0-unknown and fail pubspec constraints.
+          git -C "$sdk" tag 3.44.4
           echo "$sdk/bin" >> "$GITHUB_PATH"
 
       - name: Install Android NDK and CMake
