@@ -1,0 +1,91 @@
+name: Build Windows and macOS
+
+# Builds release bundles for Windows (x64) and macOS and uploads them as
+# downloadable artifacts. Run it from the Actions tab (Run workflow).
+# Neither bundle is code-signed or notarized.
+on:
+  workflow_dispatch:
+    inputs:
+      preview_only:
+        description: "Preview-only build (disables physical speaker control and transfer writes, as the project docs use for desktop)"
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+jobs:
+  desktop:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-2022, macos-14] # macos-14 is an Apple Silicon (arm64) runner
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    env:
+      BDK_PREVIEW: ${{ github.event_name == 'workflow_dispatch' && inputs.preview_only == false && 'false' || 'true' }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Install the verified Flutter SDK revision (3.44.4)
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $bdkSdk = Join-Path $env:RUNNER_TEMP 'bdk-flutter-sdk'
+          git init $bdkSdk
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          git -C $bdkSdk remote add origin https://github.com/flutter/flutter.git
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          git -C $bdkSdk fetch --depth=1 origin ad70ec4617166f1c38e5d2bfd388af71fda14f06
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          git -C $bdkSdk checkout --detach FETCH_HEAD
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          # A shallow single-commit fetch has no tags, so Flutter would report
+          # version 0.0.0-unknown and fail pubspec constraints.
+          git -C $bdkSdk tag 3.44.4
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          (Join-Path $bdkSdk 'bin') | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
+
+      - name: Flutter version
+        run: flutter --version
+
+      - name: Resolve locked dependencies
+        run: flutter pub get --enforce-lockfile
+
+      - name: Project-local Windows plugin links
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: ./tools/sync_windows_plugin_junctions.ps1
+
+      - name: Build Windows release bundle
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: flutter build windows --release --no-pub -t lib/main.dart "--dart-define=BDK_PREVIEW_ONLY=$env:BDK_PREVIEW"
+
+      - name: Build macOS release bundle
+        if: runner.os == 'macOS'
+        run: flutter build macos --release --no-pub -t lib/main.dart --dart-define=BDK_PREVIEW_ONLY=$BDK_PREVIEW
+
+      - name: Archive Windows bundle
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: Compress-Archive -Path build/windows/x64/runner/Release/* -DestinationPath bdk-audio-windows-x64.zip
+
+      - name: Archive macOS app
+        if: runner.os == 'macOS'
+        run: |
+          app="build/macos/Build/Products/Release/BDK Audio.app"
+          echo "Architectures in the app binary:"
+          lipo -archs "$app/Contents/MacOS/BDK Audio"
+          # ditto preserves the framework symlinks that a plain zip would break.
+          ditto -c -k --sequesterRsrc --keepParent "$app" bdk-audio-macos.zip
+
+      - name: Upload bundle
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: bdk-audio-${{ runner.os }}
+          path: |
+            bdk-audio-windows-x64.zip
+            bdk-audio-macos.zip
+          if-no-files-found: error
+          retention-days: 30
