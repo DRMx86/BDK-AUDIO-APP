@@ -52,11 +52,6 @@ jobs:
       - name: Resolve locked dependencies
         run: flutter pub get --enforce-lockfile
 
-      - name: Project-local Windows plugin links
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: ./tools/sync_windows_plugin_junctions.ps1
-
       - name: Build Windows release bundle
         if: runner.os == 'Windows'
         shell: pwsh
